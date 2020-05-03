@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# This project
+journal.md
+Networks
+Train_Data
+Test_Data
