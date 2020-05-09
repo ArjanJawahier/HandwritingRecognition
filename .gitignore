@@ -131,6 +131,7 @@ dmypy.json
 
 # This project
 journal.md
-Networks
-Train_Data
-Test_Data
+Networks/*
+Train_Data/*
+Test_Data/*
+Figures/*
