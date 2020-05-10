@@ -5,6 +5,7 @@ import PIL.ImageOps as ImageOps
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import math
 
 from persistence.persistence1d import RunPersistence
 
@@ -49,6 +50,7 @@ def create_histogram(binarized_image):
     hist = np.array(hist_list)
     return hist
     
+
 
 def plot_histogram(hist, fig_filepath, minima=None):
     """Plots the given array of counts of black pixels as a
@@ -104,6 +106,129 @@ def extract_local_minima(histogram):
     return sorted_minima
 
 
+class Node():
+    """A node class for A* Pathfinding"""
+
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+
+        self.g = 0
+        self.h = 0
+        self.f = 0
+
+    def __eq__(self, other):
+        return self.position == other.position
+
+
+def astar(img_arr, line_num, width):
+    """Returns a list of tuples as a path from the given start to the given end in the given image"""
+
+    # Create start and end node
+    start_node = Node(None, (0, line_num))
+    start_node.g = start_node.h = start_node.f = 0
+    end_node = Node(None, ((len(img_arr[0])-1), line_num))
+    end_node.g = end_node.h = end_node.f = 0
+
+    # Initialize both open and closed list
+    open_list = []
+    closed_list = []
+
+    # Add the start node
+    open_list.append(start_node)
+
+    # Loop until you find the end
+    while len(open_list) > 0:
+
+        # Get the current node
+        current_node = open_list[0]
+        current_index = 0
+        for index, item in enumerate(open_list):
+            if item.f < current_node.f:
+                current_node = item
+                current_index = index
+
+        # Pop current off open list, add to closed list
+        open_list.pop(current_index)
+        closed_list.append(current_node)
+
+        # print(current_node.position)
+        if current_node == end_node:
+            path = []
+            current = current_node
+            while current is not None:
+                path.append(current.position)
+                current = current.parent
+            return path[::-1] # Return reversed path
+
+        children = []
+        for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
+
+            # Get node position
+            node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+
+            # Make sure within range
+            if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
+                continue
+
+            # Make sure walkable terrain
+            if img_arr[node_position[1]][node_position[0]] != 0:
+                continue
+
+            # Create new node
+            new_node = Node(current_node, node_position)
+
+            # Append
+            children.append(new_node)
+
+        # Loop through children
+        for child in children:
+            valid = True
+
+            # Child is on the closed list
+            for closed_child in closed_list:
+                if child.position == closed_child.position:
+                    valid = False
+                    continue
+
+
+            # Create the f, g, and h values
+            child.g = current_node.g + 1
+            child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
+            child.f = child.g + child.h
+
+            # Child is already in the open list
+            for open_node in open_list:
+                if child.position == open_node.position and child.g >= open_node.g:
+                    valid = False
+                    continue
+
+            # Add the child to the open list
+            if valid:
+                open_list.append(child)
+
+
+def get_children(img_arr, current_node):
+    children = []
+    for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
+        # Get node position
+        node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+
+        # Make sure within range
+        if node_position[0] > (len(img_arr) - 1) or node_position[0] < 0 or node_position[1] > (len(img_arr[len(img_arr)-1]) -1) or node_position[1] < 0:
+            continue
+
+        # Make sure walkable terrain
+        if img_arr[node_position[0]][node_position[1]] != 0:
+            continue
+
+        # Create new node
+        new_node = Node(current_node, node_position)
+
+        # Append
+        children.append(new_node)
+    return children
+
 
 if __name__ == "__main__":
     # This is test code and should be removed later
@@ -135,7 +260,24 @@ if __name__ == "__main__":
     rotated_image = inverted_image.rotate(best_rot)
     inverted_rotated_image = ImageOps.invert(rotated_image)
     draw = ImageDraw.Draw(inverted_rotated_image)
-    for line_y in best_minima_rowindices:
-        draw.line((0, line_y, inverted_rotated_image.width, line_y), fill=128, width=10)
-    inverted_rotated_image.save("../Figures/best_line_segment", "PNG")
+    # for line_y in best_minima_rowindices:
+    #     draw.line((0, line_y, inverted_rotated_image.width, line_y), fill=128, width=10)
 
+    def mapping(x):
+        return x//255
+
+    def mapping_i(item):
+        y = item[0]
+        x = item[1]
+        return (x,y)
+
+    arr = np.array(rotated_image)
+    arr = np.array(list(map(mapping, arr)))
+    for row in best_minima_rowindices:
+        # draw.line((0, row, inverted_rotated_image.width, row), fill=128, width=10)
+        print(row)
+        astar_res = astar(arr, row, rotated_image.width)
+        astar_result = np.array(list(map(mapping_i, astar_res)))
+        # print(astar_res)
+        draw.point(astar_res, fill=128)
+    inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
