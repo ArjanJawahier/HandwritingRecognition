@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     min_avg = np.inf
     # for rotation in range(-6, 6, 1):
-    for rotation in [5]: # found that 5 was the best in this test case
+    for rotation in [0]: # found that 5 was the best in this test case
         rotated_image = inverted_image.rotate(rotation)
         minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation)
         if avg_of_local_minima < min_avg:
@@ -137,5 +137,5 @@ if __name__ == "__main__":
     draw = ImageDraw.Draw(inverted_rotated_image)
     for line_y in best_minima_rowindices:
         draw.line((0, line_y, inverted_rotated_image.width, line_y), fill=128, width=10)
-    inverted_rotated_image.save("../Figures/best_line_segment", "PNG")
+    inverted_rotated_image.save("../Figures/no_rot_line_segment", "PNG")
 
