@@ -161,25 +161,7 @@ def astar(img_arr, line_num, width):
                 current = current.parent
             return path[::-1] # Return reversed path
 
-        children = []
-        for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
-
-            # Get node position
-            node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-            # Make sure within range
-            if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
-                continue
-
-            # Make sure walkable terrain
-            if img_arr[node_position[1]][node_position[0]] != 0:
-                continue
-
-            # Create new node
-            new_node = Node(current_node, node_position)
-
-            # Append
-            children.append(new_node)
+        children = get_neighbours(img_arr, current_node)
 
         # Loop through children
         for child in children:
@@ -208,18 +190,19 @@ def astar(img_arr, line_num, width):
                 open_list.append(child)
 
 
-def get_children(img_arr, current_node):
+def get_neighbours(img_arr, current_node):
     children = []
     for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
+
         # Get node position
         node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
 
         # Make sure within range
-        if node_position[0] > (len(img_arr) - 1) or node_position[0] < 0 or node_position[1] > (len(img_arr[len(img_arr)-1]) -1) or node_position[1] < 0:
+        if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
             continue
 
         # Make sure walkable terrain
-        if img_arr[node_position[0]][node_position[1]] != 0:
+        if invalid_pixel(img_arr, current_node.position):
             continue
 
         # Create new node
@@ -228,6 +211,23 @@ def get_children(img_arr, current_node):
         # Append
         children.append(new_node)
     return children
+
+
+def invalid_pixel(img_arr, current_pos):
+    for add_x in range(-5, 5):
+        for add_y in range(-5, 5):
+            # Get node position
+            node_position = ((current_pos[0] + add_x), (current_pos[1] + add_y))
+
+            # Make sure within range
+            if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
+                continue
+
+            # Make sure walkable terrain
+            if img_arr[node_position[1]][node_position[0]] != 0:
+                return True
+
+    return False
 
 
 if __name__ == "__main__":
