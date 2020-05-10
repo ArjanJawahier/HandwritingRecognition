@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 import math
+import argparse
 
 from persistence.persistence1d import RunPersistence
+import visualizer as vis
 
-def line_segment(binarized_image, rotation):
+def line_segment(binarized_image, rotation, args):
     """This function segments the binarized image
     into horizontal lines of text, using the A*
     algorithm outlined in:
@@ -21,10 +23,11 @@ def line_segment(binarized_image, rotation):
 
     # Create histogram
     histogram = create_histogram(binarized_image)
-    plot_histogram(histogram, "../Figures/histogram_" + str(rotation))
-
     sorted_minima = extract_local_minima(histogram)
-    plot_histogram(histogram, "../Figures/histogram_with_extrema_" + str(rotation), minima=sorted_minima)
+    if args.visualize:
+        vis.plot_histogram(histogram, f"../Figures/histogram_{rotation}")
+        vis.plot_histogram(histogram, f"../Figures/histogram_with_extrema_{rotation}", minima=sorted_minima)
+
 
     # Some orientation might have different numbers of minima
     # To see how good the minima are, we average them.
@@ -38,50 +41,17 @@ def create_histogram(binarized_image):
     normalizes it and returns a 
     histogram of black pixels per row.
     """
-    def mapping(x):
+    def normalize_mapping(x):
         return x//255
 
     arr = np.array(binarized_image)
-    arr = np.array(list(map(mapping, arr)))
+    arr = np.array(list(map(normalize_mapping, arr)))
     hist_list = []
     for row in arr:
         sum_black_pixels = np.sum(row)
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
     return hist
-    
-
-
-def plot_histogram(hist, fig_filepath, minima=None):
-    """Plots the given array of counts of black pixels as a
-    horizontal bar chart. It then saves the image to the given
-    fig_filepath.
-    """
-    create_figdir(fig_filepath)
-    fig, ax = plt.subplots()
-    ax.barh(np.arange(len(hist)), width=hist, height=5.0, color="black")
-    if minima is not None:
-        ax.barh(minima, width=np.max(hist), height=15.0, color="red")
-    ax.set_xlabel("Num black pixels")
-    ax.set_ylabel("Row")
-    ax.set_title("Histogram of black pixels per row" if minima is None else "Histogram of black pixels per row + minima")
-    ax.set_ylim(len(hist), 0)
-    plt.savefig(fig_filepath)
-    plt.close()
-
-def create_figdir(fig_filepath):
-    """This function creates a directory if it is not
-    already present. The directory made is based on the
-    fig_filepath given to plot_histogram.
-    """
-    split = fig_filepath.split("/")
-    fig_dir = ""
-    for x in split[:-1]:
-        fig_dir += x + "/"
-
-    if not os.path.isdir(fig_dir):
-        print("Making" + fig_dir)
-        os.mkdir(fig_dir)
 
 def extract_local_minima(histogram):
     """Extracts local minima from the histogram based on the persistence1d method.
@@ -233,20 +203,33 @@ def invalid_pixel(img_arr, current_pos):
 if __name__ == "__main__":
     # This is test code and should be removed later
     # After it works
-    test_dir = "../Test_Data"
-    test_filenames = os.listdir(test_dir)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
+    parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
+    args = parser.parse_args()
+    if not args.visualize:
+        print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
+
+    # Get an example test image (arbitrarily picked)
+    test_filenames = os.listdir(args.testdata)
     for f in test_filenames:
         if "binarized" in f:
             filename = f
             break
-    binarized_image = Image.open(os.path.join(test_dir, filename))
+
+    # Open the image and invert it
+    # We want to invert it for easier histogram-making     
+    binarized_image = Image.open(os.path.join(args.testdata, filename))
     inverted_image = ImageOps.invert(binarized_image)
 
+    # Find out what the minimal average number of black pixels (or white pixels in inverted images)
+    # is per row, for various rotated versions of the input test image
+    # TODO: Streamline this (Hough transform?)
     min_avg = np.inf
     # for rotation in range(-6, 6, 1):
     for rotation in [5]: # found that 5 was the best in this test case
         rotated_image = inverted_image.rotate(rotation)
-        minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation)
+        minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation, args)
         if avg_of_local_minima < min_avg:
             min_avg = avg_of_local_minima
             best_rot = rotation
@@ -254,30 +237,34 @@ if __name__ == "__main__":
 
     # At this point, we have the best rotation for the input test image
     # And we also have the minima rowindices for rotated test image.
-    print(best_rot, best_minima_rowindices)
+    # print(best_rot, best_minima_rowindices)
 
     # We can draw lines at the mimima rowindices in the rotated image
     rotated_image = inverted_image.rotate(best_rot)
     inverted_rotated_image = ImageOps.invert(rotated_image)
-    draw = ImageDraw.Draw(inverted_rotated_image)
-    # for line_y in best_minima_rowindices:
-    #     draw.line((0, line_y, inverted_rotated_image.width, line_y), fill=128, width=10)
+    if args.visualize:
+        vis.draw_straight_lines(inverted_rotated_image, best_minima_rowindices)
 
-    def mapping(x):
+    def normalize_mapping(x):
         return x//255
 
     def mapping_i(item):
-        y = item[0]
-        x = item[1]
-        return (x,y)
+        x, y = item
+        return (y, x)
 
     arr = np.array(rotated_image)
-    arr = np.array(list(map(mapping, arr)))
+    arr = np.array(list(map(normalize_mapping, arr)))
+    astar_paths = []
     for row in best_minima_rowindices:
-        # draw.line((0, row, inverted_rotated_image.width, row), fill=128, width=10)
-        print(f"Processing row: {row}")
+        print(f"Computing A*-path for row: {row}")
         astar_res = astar(arr, row, rotated_image.width)
+
+        # What is this used for @Xabi?
         astar_result = np.array(list(map(mapping_i, astar_res)))
-        # print(astar_res)
-        draw.line(astar_res, fill="#111111", width=10)
-    inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
+
+        astar_paths.append(astar_res)
+
+    # We now have the A* paths, which is our line segmentation
+
+    if args.visualize:
+        vis.draw_astar_lines(inverted_rotated_image, astar_paths)
