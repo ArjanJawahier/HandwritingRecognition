@@ -279,5 +279,5 @@ if __name__ == "__main__":
         astar_res = astar(arr, row, rotated_image.width)
         astar_result = np.array(list(map(mapping_i, astar_res)))
         # print(astar_res)
-        draw.point(astar_res, fill=128)
+        draw.point(astar_res, fill="#FF0000")
     inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
