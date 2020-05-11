@@ -2,12 +2,15 @@
 import PIL.Image as Image
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageOps as ImageOps
+import PIL.ImageFilter as ImageFilter
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 import math
 
 from persistence.persistence1d import RunPersistence
+
+CONST_C = 250
 
 def line_segment(binarized_image, rotation):
     """This function segments the binarized image
@@ -24,14 +27,16 @@ def line_segment(binarized_image, rotation):
     plot_histogram(histogram, "../Figures/histogram_" + str(rotation))
 
     sorted_minima = extract_local_minima(histogram)
-    plot_histogram(histogram, "../Figures/histogram_with_extrema_" + str(rotation), minima=sorted_minima)
+    plot_histogram(histogram, "../Figures/histogram_with_extrema_" +
+                   str(rotation), minima=sorted_minima)
 
     # Some orientation might have different numbers of minima
     # To see how good the minima are, we average them.
     # We will work with the image orientation that has the lowest average of local minima
     # Since it is expected that the text lines are horizontal in that case.
-    avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
+    avg_of_local_minima = sum(histogram[sorted_minima]) / len(sorted_minima)
     return sorted_minima, avg_of_local_minima
+
 
 def create_histogram(binarized_image):
     """This function takes a binarized image,
@@ -39,7 +44,7 @@ def create_histogram(binarized_image):
     histogram of black pixels per row.
     """
     def mapping(x):
-        return x//255
+        return x // 255
 
     arr = np.array(binarized_image)
     arr = np.array(list(map(mapping, arr)))
@@ -49,7 +54,6 @@ def create_histogram(binarized_image):
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
     return hist
-    
 
 
 def plot_histogram(hist, fig_filepath, minima=None):
@@ -64,10 +68,12 @@ def plot_histogram(hist, fig_filepath, minima=None):
         ax.barh(minima, width=np.max(hist), height=15.0, color="red")
     ax.set_xlabel("Num black pixels")
     ax.set_ylabel("Row")
-    ax.set_title("Histogram of black pixels per row" if minima is None else "Histogram of black pixels per row + minima")
+    ax.set_title(
+        "Histogram of black pixels per row" if minima is None else "Histogram of black pixels per row + minima")
     ax.set_ylim(len(hist), 0)
     plt.savefig(fig_filepath)
     plt.close()
+
 
 def create_figdir(fig_filepath):
     """This function creates a directory if it is not
@@ -83,6 +89,7 @@ def create_figdir(fig_filepath):
         print("Making" + fig_dir)
         os.mkdir(fig_dir)
 
+
 def extract_local_minima(histogram):
     """Extracts local minima from the histogram based on the persistence1d method.
     This was also done in the A* paper.
@@ -96,7 +103,8 @@ def extract_local_minima(histogram):
     persistence_threshold = len(histogram) / 20
 
     # Only take extrema with persistence > threshold
-    filtered_extrema = [t[0] for t in extrema_with_persistence if t[1] > persistence_threshold]
+    filtered_extrema = [
+        t[0] for t in extrema_with_persistence if t[1] > persistence_threshold]
 
     # Sort the extrema, results == [min, max, min, max, min, max, etc..]
     sorted_extrema = sorted(filtered_extrema)
@@ -121,13 +129,13 @@ class Node():
         return self.position == other.position
 
 
-def astar(img_arr, line_num, width):
+def astar(img_arr, line_num):
     """Returns a list of tuples as a path from the given start to the given end in the given image"""
 
     # Create start and end node
     start_node = Node(None, (0, line_num))
     start_node.g = start_node.h = start_node.f = 0
-    end_node = Node(None, ((len(img_arr[0])-1), line_num))
+    end_node = Node(None, ((len(img_arr[0]) - 1), line_num))
     end_node.g = end_node.h = end_node.f = 0
 
     # Initialize both open and closed list
@@ -159,12 +167,12 @@ def astar(img_arr, line_num, width):
             while current is not None:
                 path.append(current.position)
                 current = current.parent
-            return path[::-1] # Return reversed path
+            return path[::-1]  # Return reversed path
 
         children = get_neighbours(img_arr, current_node)
 
         # Loop through children
-        for child in children:
+        for neighbour_cost, child in children:
             valid = True
 
             # Child is on the closed list
@@ -173,10 +181,10 @@ def astar(img_arr, line_num, width):
                     valid = False
                     continue
 
-
             # Create the f, g, and h values
-            child.g = current_node.g + 1
-            child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
+            d = CONST_C / (1 + obj_distance(img_arr, child))
+            child.g = current_node.g + neighbour_cost + (0.9 * d)
+            child.h = 14 * math.sqrt(((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2))
             child.f = child.g + child.h
 
             # Child is already in the open list
@@ -192,42 +200,63 @@ def astar(img_arr, line_num, width):
 
 def get_neighbours(img_arr, current_node):
     children = []
-    for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
+    for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]:  # Adjacent squares
 
         # Get node position
         node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
 
         # Make sure within range
-        if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
-            continue
-
-        # Make sure walkable terrain
-        if invalid_pixel(img_arr, current_node.position):
+        if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr) - 1]) - 1) or node_position[0] < 0:
             continue
 
         # Create new node
         new_node = Node(current_node, node_position)
 
         # Append
-        children.append(new_node)
+        if (new_position == (1, -1)) or (new_position == (1, 1)):
+            children.append((14, new_node))
+        else:
+            children.append((10, new_node))
     return children
 
 
-def invalid_pixel(img_arr, current_pos):
-    for add_x in range(-5, 5):
-        for add_y in range(-5, 5):
-            # Get node position
-            node_position = ((current_pos[0] + add_x), (current_pos[1] + add_y))
+def obj_distance(img_arr, current_node):
+    pixels = 0
+    min_pixels = 999
+    for i in range(0, current_node.position[1]):
+        if img_arr[i][current_node.position[0]] != 0:
+            min_pixels = pixels
+            break
+        else:
+            pixels += 1
+    pixels = 0
+    for i in range(current_node.position[1], len(img_arr)):
+        if img_arr[i][current_node.position[0]] != 0:
+            return pixels
+        elif pixels > min_pixels:
+            return min_pixels
+        else:
+            pixels += 1
+    return min_pixels
 
-            # Make sure within range
-            if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
-                continue
+# def obj_up(img_arr, current_node):
+#     pixels = 0
+#     for i in range(0, current_node.position[1]):
+#         if img_arr[i][current_node.position[0]] != 0:
+#             return pixels
+#         else:
+#             pixels += 1
+#     return 9999
 
-            # Make sure walkable terrain
-            if img_arr[node_position[1]][node_position[0]] != 0:
-                return True
 
-    return False
+# def obj_down(img_arr, current_node):
+#     pixels = 0
+#     for i in range(current_node.position[1], len(img_arr)):
+#         if img_arr[i][current_node.position[0]] != 0:
+#             return pixels
+#         else:
+#             pixels += 1
+#     return 9999
 
 
 if __name__ == "__main__":
@@ -244,9 +273,10 @@ if __name__ == "__main__":
 
     min_avg = np.inf
     # for rotation in range(-6, 6, 1):
-    for rotation in [5]: # found that 5 was the best in this test case
+    for rotation in [5]:  # found that 5 was the best in this test case
         rotated_image = inverted_image.rotate(rotation)
-        minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation)
+        minima_rowindices, avg_of_local_minima = line_segment(
+            rotated_image, rotation)
         if avg_of_local_minima < min_avg:
             min_avg = avg_of_local_minima
             best_rot = rotation
@@ -264,20 +294,21 @@ if __name__ == "__main__":
     #     draw.line((0, line_y, inverted_rotated_image.width, line_y), fill=128, width=10)
 
     def mapping(x):
-        return x//255
+        return x // 255
 
     def mapping_i(item):
         y = item[0]
         x = item[1]
-        return (x,y)
+        return (x, y)
 
-    arr = np.array(rotated_image)
+    filtered_img = rotated_image.filter(ImageFilter.ModeFilter(size=5))
+    filtered_img = filtered_img.filter(ImageFilter.BLUR)
+    filtered_img = filtered_img.filter(ImageFilter.SMOOTH)
+
+    arr = np.array(filtered_img)
     arr = np.array(list(map(mapping, arr)))
     for row in best_minima_rowindices:
         # draw.line((0, row, inverted_rotated_image.width, row), fill=128, width=10)
         print(row)
-        astar_res = astar(arr, row, rotated_image.width)
-        astar_result = np.array(list(map(mapping_i, astar_res)))
-        # print(astar_res)
-        draw.point(astar_res, fill="#FF0000")
+        draw.point(astar(arr, row), fill=128)
     inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
