@@ -137,4 +137,5 @@ if __name__ == "__main__":
         nll_loss = torch.nn.NLLLoss().to(device)
         optimizer = torch.optim.Adam(clf.parameters(), lr=opt.learningrate, betas=(opt.beta1, opt.beta2))
         train(opt, clf, train_dataloader, nll_loss, optimizer, device)
-    elif opt.test:
+    # elif opt.test:
+

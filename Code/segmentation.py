@@ -4,13 +4,17 @@ import PIL.ImageDraw as ImageDraw
 import PIL.ImageOps as ImageOps
 import PIL.ImageFilter as ImageFilter
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import ion
+from matplotlib import style
 import os
 import numpy as np
 import math
+import argparse
 
 from persistence.persistence1d import RunPersistence
 
 CONST_C = 250
+parser = argparse.ArgumentParser()
 
 def line_segment(binarized_image, rotation):
     """This function segments the binarized image
@@ -129,9 +133,8 @@ class Node():
         return self.position == other.position
 
 
-def astar(img_arr, line_num):
+def astar(img_arr, line_num, draw):
     """Returns a list of tuples as a path from the given start to the given end in the given image"""
-
     # Create start and end node
     start_node = Node(None, (0, line_num))
     start_node.g = start_node.h = start_node.f = 0
@@ -142,12 +145,24 @@ def astar(img_arr, line_num):
     open_list = []
     closed_list = []
 
+    # fig, ax = plt.subplots()
+    # x = range(2000)
+    # ax.imshow(img_arr)
+    # ax.plot(x, x, '-', linewidth=2, color='firebrick')
+
+    # plt.show()
+    if draw:
+        fig = plt.gcf()
+        fig.show()
+        fig.canvas.draw()
+        plt.imshow(img_arr)
+
     # Add the start node
     open_list.append(start_node)
 
     # Loop until you find the end
     while len(open_list) > 0:
-
+        
         # Get the current node
         current_node = open_list[0]
         current_index = 0
@@ -158,9 +173,8 @@ def astar(img_arr, line_num):
 
         # Pop current off open list, add to closed list
         open_list.pop(current_index)
+        print(current_node.position)
         closed_list.append(current_node)
-
-        # print(current_node.position)
         if current_node == end_node:
             path = []
             current = current_node
@@ -196,6 +210,9 @@ def astar(img_arr, line_num):
             # Add the child to the open list
             if valid:
                 open_list.append(child)
+        if draw:
+            plt.plot(current_node.position, linewidth=8)
+            fig.canvas.draw()
 
 
 def get_neighbours(img_arr, current_node):
@@ -262,6 +279,9 @@ def obj_distance(img_arr, current_node):
 if __name__ == "__main__":
     # This is test code and should be removed later
     # After it works
+    parser.add_argument('-p', '--print', default=False)
+    args = parser.parse_args()
+    use_print = args.print
     test_dir = "../Test_Data"
     test_filenames = os.listdir(test_dir)
     for f in test_filenames:
@@ -310,6 +330,6 @@ if __name__ == "__main__":
     for row in best_minima_rowindices:
         # draw.line((0, row, inverted_rotated_image.width, row), fill=128, width=10)
         print(f"Processing row: {row}")
-        astar_res = astar(arr, row, rotated_image.width)
+        astar_res = astar(arr, row, use_print)
         draw.line(astar_res, fill="#111111", width=10)
     inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
