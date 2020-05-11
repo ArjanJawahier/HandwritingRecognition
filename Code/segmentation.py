@@ -309,6 +309,7 @@ if __name__ == "__main__":
     arr = np.array(list(map(mapping, arr)))
     for row in best_minima_rowindices:
         # draw.line((0, row, inverted_rotated_image.width, row), fill=128, width=10)
-        print(row)
-        draw.point(astar(arr, row), fill=128)
+        print(f"Processing row: {row}")
+        astar_res = astar(arr, row, rotated_image.width)
+        draw.line(astar_res, fill="#111111", width=10)
     inverted_rotated_image.save("../Figures/astar_line_segments.png", "PNG")
