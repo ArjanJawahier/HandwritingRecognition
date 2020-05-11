@@ -11,7 +11,7 @@ import argparse
 from persistence.persistence1d import RunPersistence
 import visualizer as vis
 
-def line_segment(binarized_image, rotation, args):
+def line_segment(image, rotation, args):
     """This function segments the binarized image
     into horizontal lines of text, using the A*
     algorithm outlined in:
@@ -22,7 +22,7 @@ def line_segment(binarized_image, rotation, args):
     """
 
     # Create histogram
-    histogram = create_histogram(binarized_image)
+    histogram = create_histogram(image)
     sorted_minima = extract_local_minima(histogram)
     if args.visualize:
         vis.plot_histogram(histogram, f"../Figures/histogram_{rotation}")
@@ -36,7 +36,7 @@ def line_segment(binarized_image, rotation, args):
     avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
     return sorted_minima, avg_of_local_minima
 
-def create_histogram(binarized_image):
+def create_histogram(image):
     """This function takes a binarized image,
     normalizes it and returns a 
     histogram of black pixels per row.
@@ -44,7 +44,7 @@ def create_histogram(binarized_image):
     def normalize_mapping(x):
         return x//255
 
-    arr = np.array(binarized_image)
+    arr = np.array(image)
     arr = np.array(list(map(normalize_mapping, arr)))
     hist_list = []
     for row in arr:
@@ -58,7 +58,6 @@ def extract_local_minima(histogram):
     This was also done in the A* paper.
     """
 
-    # TODO: Might need to cut off the white space above and under the actual text
     # Use persistence to find out local minima
     extrema_with_persistence = RunPersistence(histogram)
 
@@ -76,7 +75,7 @@ def extract_local_minima(histogram):
     return sorted_minima
 
 
-class Node():
+class Node:
     """A node class for A* Pathfinding"""
 
     def __init__(self, parent=None, position=None):
@@ -88,119 +87,132 @@ class Node():
         self.f = 0
 
     def __eq__(self, other):
-        return self.position == other.position
+        return np.array_equal(self.position, other.position)
 
+def astar(img_arr, line_num, args):
 
-def astar(img_arr, line_num, width):
-    """Returns a list of tuples as a path from the given start to the given end in the given image"""
+    # TODO IDEA: Maybe we can maxpool the img_arr first, 
+    # TODO IDEA: find the A*-path in the maxpooled image
+    # TODO IDEA: and then we can scale the A* path up?
 
-    # Create start and end node
-    start_node = Node(None, (0, line_num))
-    start_node.g = start_node.h = start_node.f = 0
-    end_node = Node(None, ((len(img_arr[0])-1), line_num))
-    end_node.g = end_node.h = end_node.f = 0
+    # The start node starts with H(n) = width of image
+    # The start node start with F(n) = G'(n) + H(n)
+    start_node = Node(parent=None, position=np.array([0, line_num]))
+    start_node.h = img_arr.shape[1]
+    start_node.f = start_node.g + start_node.h
 
-    # Initialize both open and closed list
-    open_list = []
-    closed_list = []
+    end_node = Node(parent=None, position=np.array([img_arr.shape[1] - 1, line_num]))
 
-    # Add the start node
-    open_list.append(start_node)
+    priority_queue = [start_node]
+    expanded_nodes = []
 
-    # Loop until you find the end
-    while len(open_list) > 0:
+    while len(priority_queue) > 0:
+        # First item in queue gets expanded first
+        current_node = priority_queue.pop(0)
+        expanded_nodes.append(current_node)
 
-        # Get the current node
-        current_node = open_list[0]
-        current_index = 0
-        for index, item in enumerate(open_list):
-            if item.f < current_node.f:
-                current_node = item
-                current_index = index
-
-        # Pop current off open list, add to closed list
-        open_list.pop(current_index)
-        closed_list.append(current_node)
-
-        # print(current_node.position)
         if current_node == end_node:
             path = []
             current = current_node
             while current is not None:
-                path.append(current.position)
+                path.append(tuple(current.position))
                 current = current.parent
-            return path[::-1] # Return reversed path
+            return path[::-1]
 
-        children = get_neighbours(img_arr, current_node)
+        neighbours = get_neighbours(img_arr, current_node)
 
-        # Loop through children
-        for child in children:
+        for neighbour_cost, neighbour in neighbours:
             valid = True
 
-            # Child is on the closed list
-            for closed_child in closed_list:
-                if child.position == closed_child.position:
+            for node in expanded_nodes:
+                if neighbour == node:
                     valid = False
-                    continue
+                    break
 
-
-            # Create the f, g, and h values
-            child.g = current_node.g + 1
-            child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
-            child.f = child.g + child.h
-
-            # Child is already in the open list
-            for open_node in open_list:
-                if child.position == open_node.position and child.g >= open_node.g:
-                    valid = False
-                    continue
-
-            # Add the child to the open list
             if valid:
-                open_list.append(child)
+                # Calculate g, h and f values
+                d_cost = args.CONST_C / (1 + min_dist_cost(img_arr, current_node))
+                neighbour.g = neighbour_cost + d_cost
+                neighbour.h = np.linalg.norm(neighbour.position - end_node.position)
+                neighbour.f = neighbour.g + neighbour.h
+
+                for node in priority_queue:
+                    if node.f > neighbour.f:
+                        # If the cost is higher than the neighbour, we can stop the loop
+                        # Since it's a priority queue, the list will be ordered on the nodes' f cost
+                        break
+
+                    if np.array_equal(neighbour.position, node.position) and neighbour.f < node.f:
+                        priority_queue.remove(node)
+
+                    for index, node in enumerate(priority_queue):
+                        if node.f > neighbour.f:
+                            # Insert the node at the right place in the queue
+                            priority_queue.insert(index, neighbour)
+                            break
+                    break
+
+                # Could be that the previous for loop didnt loop cause the queue was empty
+                # Fix that by inserting the neighbour from within an if-statement
+                if len(priority_queue) == 0:
+                    priority_queue.insert(0, neighbour)
+
+    if len(priority_queue) == 0:
+        print("Test")
+        path = []
+        current = current_node
+        while current is not None:
+            path.append(tuple(current.position))
+            current = current.parent
+        return path[::-1]
 
 
 def get_neighbours(img_arr, current_node):
-    children = []
-    for new_position in [(0, -1), (0, 1), (1, 0), (1, -1), (1, 1)]: # Adjacent squares
+    """Gets the neighbouring nodes together with the neighbour cost"""
+    neighbours = []
+    possible_moves = np.array([[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]])
+    for move in possible_moves:
 
-        # Get node position
-        node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+        neighbour_pos = current_node.position + move
+        r, c = neighbour_pos
 
-        # Make sure within range
-        if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
+        if r < 0 or r >= img_arr.shape[0] or c < 0 or c >= img_arr.shape[1]:
+            # New position is out of bounds! Ignore this move
             continue
 
-        # Make sure the new_position is walkable terrain
-        if invalid_pixel(img_arr, current_node.position):
-            continue
-
-        # Create new node
-        new_node = Node(current_node, node_position)
-
-        # Append
-        children.append(new_node)
-    return children
+        new_node = Node(parent=current_node, position=neighbour_pos)
+        if np.sum(move) != 1:
+            # Neighbour cost is 14
+            neighbours.append((14, new_node))
+        else:
+            neighbours.append((10, new_node))
+    return neighbours
 
 
-def invalid_pixel(img_arr, current_pos):
-    # TODO question: Why are we checking whether the current pos is an invalid
-    # position? Shouldn't we check that before making it the current pos?
-    # TODO question: Why are we adding x from a range of -5 to 4? Why are we checking backwards?
-    for add_x in range(-5, 5):
-        for add_y in range(-5, 5):
-            # Get node position
-            node_position = ((current_pos[0] + add_x), (current_pos[1] + add_y))
+def min_dist_cost(img_arr, current_node):
+    """Calculate the minimum distance cost as defined in the paper:
+    https://www.ai.rug.nl/~mwiering/GROUP/ARTICLES/LineSegmentation.pdf
+    """
+    max_value = 16384
+    dist_up = -1
+    current_r, current_c = current_node.position
+    for r in range(current_r, -1, -1):
+        if img_arr[r, current_c] > 0:
+            break
+        else:
+            dist_up += 1
 
-            # Make sure within range
-            if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
-                continue
+    dist_down = -1
+    for r in range(current_r, img_arr.shape[0]):
+        if img_arr[r, current_c] > 0:
+            break
+        else:
+            dist_down += 1
 
-            # Make sure walkable terrain
-            if img_arr[node_position[1]][node_position[0]] != 0:
-                return True
-
-    return False
+    if dist_up == -1 and dist_down == -1:
+        return max_value
+    else:
+        return min(dist_up, dist_down)
 
 
 if __name__ == "__main__":
@@ -209,6 +221,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
     parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
+    parser.add_argument("--CONST_C", type=int, default=250, help="The constant C in the formula for D(n). See A* paper.")
     args = parser.parse_args()
     if not args.visualize:
         print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
@@ -223,14 +236,15 @@ if __name__ == "__main__":
     # Open the image and invert it
     # We want to invert it for easier histogram-making     
     binarized_image = Image.open(os.path.join(args.testdata, filename))
-    inverted_image = ImageOps.invert(binarized_image)
+    resized_image = binarized_image.resize((binarized_image.width//4, binarized_image.height//4))
+    inverted_image = ImageOps.invert(resized_image)
 
     # Find out what the minimal average number of black pixels (or white pixels in inverted images)
     # is per row, for various rotated versions of the input test image
     # TODO: Streamline this (Hough transform?)
     min_avg = np.inf
     # for rotation in range(-6, 6, 1):
-    for rotation in [0]: # found that 5 was the best in this test case
+    for rotation in [5]: # found that 5 was the best in this test case
         rotated_image = inverted_image.rotate(rotation)
         minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation, args)
         if avg_of_local_minima < min_avg:
@@ -252,20 +266,13 @@ if __name__ == "__main__":
     def normalize_mapping(x):
         return x//255
 
-    def swap_mapping(item):
-        x, y = item
-        return (y, x)
-
     arr = np.array(rotated_image)
     arr = np.array(list(map(normalize_mapping, arr)))
+    print(arr.shape)
     astar_paths = []
     for row in best_minima_rowindices:
         print(f"Computing A*-path for row: {row}")
-        astar_res = astar(arr, row, rotated_image.width)
-
-        # What is this used for @Xabi?
-        astar_result = np.array(list(map(swap_mapping, astar_res)))
-
+        astar_res = astar(arr, row, args)
         astar_paths.append(astar_res)
 
     # We now have the A* paths, which is our line segmentation
