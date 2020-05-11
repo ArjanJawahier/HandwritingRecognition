@@ -171,7 +171,7 @@ def get_neighbours(img_arr, current_node):
         if node_position[1] > (len(img_arr) - 1) or node_position[1] < 0 or node_position[0] > (len(img_arr[len(img_arr)-1]) -1) or node_position[0] < 0:
             continue
 
-        # Make sure walkable terrain
+        # Make sure the new_position is walkable terrain
         if invalid_pixel(img_arr, current_node.position):
             continue
 
@@ -184,6 +184,9 @@ def get_neighbours(img_arr, current_node):
 
 
 def invalid_pixel(img_arr, current_pos):
+    # TODO question: Why are we checking whether the current pos is an invalid
+    # position? Shouldn't we check that before making it the current pos?
+    # TODO question: Why are we adding x from a range of -5 to 4? Why are we checking backwards?
     for add_x in range(-5, 5):
         for add_y in range(-5, 5):
             # Get node position
@@ -248,7 +251,7 @@ if __name__ == "__main__":
     def normalize_mapping(x):
         return x//255
 
-    def mapping_i(item):
+    def swap_mapping(item):
         x, y = item
         return (y, x)
 
@@ -260,7 +263,7 @@ if __name__ == "__main__":
         astar_res = astar(arr, row, rotated_image.width)
 
         # What is this used for @Xabi?
-        astar_result = np.array(list(map(mapping_i, astar_res)))
+        astar_result = np.array(list(map(swap_mapping, astar_res)))
 
         astar_paths.append(astar_res)
 
