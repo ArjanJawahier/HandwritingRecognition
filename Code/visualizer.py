@@ -18,9 +18,9 @@ def plot_histogram(hist, fig_filepath, minima=None):
     """
     create_figdir(fig_filepath)
     fig, ax = plt.subplots()
-    ax.barh(np.arange(len(hist)), width=hist, height=5.0, color="black")
+    ax.barh(np.arange(len(hist)), width=hist, height=len(hist)//150, color="black")
     if minima is not None:
-        ax.barh(minima, width=np.max(hist), height=15.0, color="red")
+        ax.barh(minima, width=np.max(hist), height=len(hist)//75, color="red")
     ax.set_xlabel("Num black pixels")
     ax.set_ylabel("Row")
     ax.set_title("Histogram of black pixels per row" if minima is None else "Histogram of black pixels per row + minima")
@@ -51,7 +51,7 @@ def draw_straight_lines(image, best_minima_rowindices, save_location="../Figures
     """
     drawer = ImageDraw.Draw(image)
     for line_y in best_minima_rowindices:
-        drawer.line((0, line_y, image.width, line_y), fill=128, width=10)
+        drawer.line((0, line_y, image.width, line_y), fill=128, width=image.height//100)
     image.save(save_location, "PNG")
     print(f"Saved image to {save_location}")
 
@@ -62,6 +62,7 @@ def draw_astar_lines(image, astar_paths, save_location="../Figures/astar_line_se
     """
     drawer = ImageDraw.Draw(image)
     for path in astar_paths:
-        drawer.line(path, fill="#111111", width=10)
+        drawer.line(path, fill="#FF0000", width=image.height//150)
+
     image.save(save_location, "PNG")
     print(f"Saved image to {save_location}")
