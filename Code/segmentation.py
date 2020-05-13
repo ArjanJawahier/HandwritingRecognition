@@ -7,6 +7,8 @@ import os
 import numpy as np
 import math
 import argparse
+from heapq import heapify, heappop, heappush
+
 
 from persistence.persistence1d import RunPersistence
 import visualizer as vis
@@ -116,8 +118,14 @@ class Node:
         self.h = 0
         self.f = 0
 
+    def __hash__(self):
+        return hash(self.position.tobytes())
+
     def __eq__(self, other):
         return np.array_equal(self.position, other.position)
+
+    def __lt__(self, other):
+        return self.f < other.f
 
     def __repr__(self):
         return f"(pos: {self.position}, f: {self.f})"
@@ -146,15 +154,19 @@ def astar(args, img_arr, line_num):
     start_node.f = start_node.g + start_node.h
     end_node = Node(parent=None, position=np.array([line_num, img_arr.shape[1] - 1]))
 
-    priority_queue = [start_node]
-    expanded_nodes = []
+    priority_queue = []
+    heappush(priority_queue, start_node)
+    expanded_nodes = set()
 
     while len(priority_queue) > 0:
         # First item in queue gets expanded first
-        current_node = priority_queue.pop(0)
+        current_node = heappop(priority_queue)
+        top_options = {}
+        while (current_node in expanded_nodes):  # If already checked (with higher priority) then take new one
+            current_node = heappop(priority_queue)
         # if current_node.position[0] == line_num:
         #     print(current_node.position,  "      " , current_node.f)
-        expanded_nodes.append(current_node.position)
+        expanded_nodes.add(current_node)
 
 
         if current_node == end_node:
@@ -172,61 +184,19 @@ def astar(args, img_arr, line_num):
 
         for neighbour_cost, neighbour in neighbours:
             inserted = False
-            valid = True
-
-            for pos in expanded_nodes:
-                if np.array_equal(neighbour.position, pos):
-                    valid = False
-                    break
-
-            if valid:
+            if neighbour not in expanded_nodes:
                 # Calculate g, h and f values
                 d_cost = args.CONST_C / (1 + min_dist_cost(img_arr, neighbour))
                 neighbour.g = neighbour_cost + d_cost
                 neighbour.h = np.linalg.norm(end_node.position - neighbour.position)
                 neighbour.f = neighbour.g + neighbour.h
 
-                if len(priority_queue) == 0:
-                    priority_queue.insert(0, neighbour)
-                    inserted = True
-                    continue
-
-                # A few cases are possible:
-                # 1) The neighbouring node gets updated with lower f
-                # 2) The neighbouring node is not yet in the priority queue and not in the expanded nodes, so it gets added to the priority queue
-                # 3) The neighbouring node is already in the queue with lower f. --> Ignore this neighbour node
-                for index_1, node_1 in enumerate(priority_queue.copy()):
-                    if np.array_equal(neighbour.position, node_1.position):
-                        if neighbour.f <= node_1.f:
-                            priority_queue.pop(index_1)
-
-                            for index_2, node_2 in enumerate(priority_queue.copy()):
-                                if node_2.f > neighbour.f:
-                                    # Insert the node at the right place in the queue
-                                    if not inserted:
-                                        # print(f"Inserted at 1: {neighbour}")
-                                        priority_queue.insert(index_2, neighbour)
-                                        inserted = True
-                                        break
-                        else:
-                            # It is already in the queue
-                            inserted = True
-                            break
-
-                if not inserted:
-                    for index, node in enumerate(priority_queue.copy()):
-                        if node.f > neighbour.f:
-                            # Insert the node at the right place in the queue
-                            # print(f"Inserting because not inserted at 1: {neighbour}")
-                            priority_queue.insert(index, neighbour)
-                            inserted = True
-                            break
-
-       
-                if not inserted:
-                    # print(f"Appending because not inserted at 1 and 2: {neighbour}")
-                    priority_queue.append(neighbour)
-                            
+                if (neighbour not in top_options) or (top_options[neighbour.__hash__] > neighbour.f):
+                    heappush(priority_queue , neighbour) 
+                    top_options[neighbour.__hash__] = neighbour.f
+                else:
+                    print("Skip")
+                
 
 def get_neighbours(img_arr, current_node):
     """Gets the neighbouring nodes together with the neighbour cost"""
