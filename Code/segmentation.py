@@ -9,6 +9,8 @@ import math
 import argparse
 from heapq import heapify, heappop, heappush
 
+import multiprocessing
+from multiprocessing import Process, Queue
 
 from persistence.persistence1d import RunPersistence
 import visualizer as vis
@@ -139,14 +141,23 @@ def perform_astar_pathfinding(args, image, minima_rowindices):
     arr = np.array(list(map(normalize_mapping, arr)))
     print(arr.shape)
     astar_paths = []
-    for row in minima_rowindices:
-        print(f"Computing A*-path for row: {row}")
-        astar_res = astar(args, arr, row)
-        astar_paths.append(astar_res)
+
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
+    jobs = []
+    for row in range(len(minima_rowindices)):
+        p = multiprocessing.Process(target=astar, args=(args, arr, minima_rowindices[row], return_dict))
+        jobs.append(p)
+        p.start()
+
+    for proc in jobs:
+        proc.join()
+    astar_paths = return_dict.values()
 
     return astar_paths
 
-def astar(args, img_arr, line_num):
+def astar(args, img_arr, line_num, return_dict):
+    print(f"Computing A*-path for row: {line_num}")
     # The start node starts with H(n) = width of image
     # The start node start with F(n) = G'(n) + H(n)
     start_node = Node(parent=None, position=np.array([line_num, 0]))
@@ -178,7 +189,8 @@ def astar(args, img_arr, line_num):
                 position = (c, r)
                 path.append(position)
                 current = current.parent
-            return path[::-1]
+            return_dict[line_num] = path[::-1]
+            break
 
         neighbours = get_neighbours(img_arr, current_node)
 
