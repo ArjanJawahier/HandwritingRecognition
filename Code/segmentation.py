@@ -175,8 +175,6 @@ def astar(args, img_arr, line_num, return_dict):
         top_options = {}
         while (current_node in expanded_nodes):  # If already checked (with higher priority) then take new one
             current_node = heappop(priority_queue)
-        # if current_node.position[0] == line_num:
-        #     print(current_node.position,  "      " , current_node.f)
         expanded_nodes.add(current_node)
 
 
@@ -184,7 +182,7 @@ def astar(args, img_arr, line_num, return_dict):
             path = []
             current = current_node
             while current is not None:
-                position = current.position*args.subsampling
+                position = current.position * args.subsampling
                 r, c = position
                 position = (c, r)
                 path.append(position)
@@ -227,9 +225,6 @@ def get_neighbours(img_arr, current_node):
         if np.array_equal(move, np.array([1, 1])) or np.array_equal(move, np.array([-1, 1])):
             # Neighbour cost is 14 when moving diagonally
             neighbours.append((14, new_node))
-        elif np.array_equal(move, np.array([1, 0])) or np.array_equal(move, np.array([-1, 0])):
-            # Neighbour cost is 20 when moving upward or downward
-            neighbours.append((20, new_node))
         else:
             # Neighbour cost is 10 when moving up, down or to the right
             neighbours.append((10, new_node))
@@ -271,7 +266,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
     parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
-    parser.add_argument("--CONST_C", type=int, default=250, help="The constant C in the formula for D(n). See A* paper.")
+    parser.add_argument("--CONST_C", type=int, default=-50, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
     args = parser.parse_args()
     if not args.visualize:
@@ -305,3 +300,5 @@ if __name__ == "__main__":
         rotated_original_image = inverted_original_image.rotate(best_rot)
         inverted_inverted_image = ImageOps.invert(rotated_original_image)
         vis.draw_astar_lines(inverted_inverted_image, astar_paths)
+
+    # We can now segment each line into character zones
