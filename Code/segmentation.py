@@ -2,6 +2,7 @@
 import PIL.Image as Image
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageOps as ImageOps
+import PIL.ImageFilter as ImageFilter
 import matplotlib.pyplot as plt
 import os
 import numpy as np
@@ -32,7 +33,7 @@ def find_best_rotation(image):
     """
     min_avg = np.inf
     # for rotation in range(-6, 6, 1):
-    for rotation in [5]: # found that 5 was the best in this test case
+    for rotation in range(-6, 6, 1): # found that 5 was the best in this test case
         rotated_image = inverted_image.rotate(rotation)
         minima_rowindices, avg_of_local_minima = line_segment(args, rotated_image, rotation)
         if avg_of_local_minima < min_avg:
@@ -58,10 +59,10 @@ def line_segment(args, image, rotation):
 
     # Create histogram
     histogram = create_histogram(image)
-    sorted_minima = extract_local_minima(histogram, 10)
-    if args.visualize:
-        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
-        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
+    sorted_minima = extract_local_minima(histogram, 4)
+    # if args.visualize:
+    #     vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
+    #     vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
 
 
     # Some orientation might have different numbers of minima
@@ -70,6 +71,7 @@ def line_segment(args, image, rotation):
     # Since it is expected that the text lines are horizontal in that case.
     avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
     return sorted_minima, avg_of_local_minima
+
 
 def create_histogram(image):
     """This function takes a binarized image,
@@ -86,7 +88,7 @@ def create_histogram(image):
         sum_black_pixels = np.sum(row)
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
-    smooth_hist = savgol_filter(hist, 51, 3)
+    smooth_hist = savgol_filter(hist, 15, 3)
     return smooth_hist
 
 def extract_local_minima(histogram, persistence_threshold):
@@ -332,75 +334,76 @@ if __name__ == "__main__":
     for f in test_filenames:
         if "binarized" in f:
             filename = f
-            break
 
-    binarized_image = Image.open(os.path.join(args.testdata, filename))
-    inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
-    best_rot, minima_rowindices = find_best_rotation(inverted_image)
-    image = rotate_invert_image(inverted_image, best_rot)
+            binarized_image = Image.open(os.path.join(args.testdata, filename))
+            inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
+            best_rot, minima_rowindices = find_best_rotation(inverted_image)
+            image = rotate_invert_image(inverted_image, best_rot)
 
-    # At this point, we have the best rotation for the input test image
-    # And we also have the minima rowindices for rotated test image.
-    print(minima_rowindices)
+            # At this point, we have the best rotation for the input test image
+            # And we also have the minima rowindices for rotated test image.
+            print("minima ", minima_rowindices)
 
-    # We can draw lines at the mimima rowindices in the rotated image
-    if args.visualize:
-        vis.draw_straight_lines(image, minima_rowindices)
+            # We can draw lines at the mimima rowindices in the rotated image
+            if args.visualize:
+                vis.draw_straight_lines(image, minima_rowindices, "../Figures/straight_"+ filename + ".png")
 
-    line_segments = perform_astar_pathfinding(args, image, minima_rowindices)
+            line_segments = perform_astar_pathfinding(args, image, minima_rowindices)
 
-    # We now have the A* paths in the horizontal direction,
-    # which is our line segmentation
+            # We now have the A* paths in the horizontal direction,
+            # which is our line segmentation
 
-    # We now have the A* paths in the vertical direction,
-    # which is our character zone segmentation
-    if args.visualize:
-        inverted_original_image = ImageOps.invert(binarized_image)
-        rotated_original_image = inverted_original_image.rotate(best_rot)
-        inverted_inverted_image = ImageOps.invert(rotated_original_image)
-        vis.draw_astar_lines(inverted_inverted_image, line_segments)
-
-
-    inverted_image = prepare_inverted_image(binarized_image, 1)
-    image = rotate_invert_image(inverted_image, best_rot)
-    image_array = np.array(image)
-    image_from_array = Image.fromarray(image_array)
-    # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
-
-    for index, segment_bottom_path in enumerate(line_segments[1:]):
-        segment_top_path = line_segments[index]
-        segment_top_path = supersample_path(segment_top_path)
-        segment_bottom_path = supersample_path(segment_bottom_path)
-
-        top = image_array.shape[1]
-        bot = 0     
-        # c, r -- because the path has x, y coordinate system instead of r, c
-        for c, r in segment_top_path:
-            if r < top:
-                top = r
-        for c, r in segment_bottom_path:
-            if r > bot:
-                bot = r
+            # We now have the A* paths in the vertical direction,
+            # which is our character zone segmentation
+            if args.visualize:
+                inverted_original_image = ImageOps.invert(binarized_image)
+                rotated_original_image = inverted_original_image.rotate(best_rot)
+                inverted_inverted_image = ImageOps.invert(rotated_original_image)
+                blurred_inverted_image = inverted_inverted_image.filter(ImageFilter.BLUR)
+                blurred_inverted_image = blurred_inverted_image.filter(ImageFilter.SMOOTH_MORE)
+                vis.draw_astar_lines(blurred_inverted_image, line_segments, "../Figures/astar_"+ filename + ".png")
 
 
-        num_rows = bot - top
-        num_cols = len(segment_top_path)
-        segment_array = np.ones((num_rows, num_cols))
-        segment_array *= 255
+            inverted_image = prepare_inverted_image(binarized_image, 1)
+            image = rotate_invert_image(inverted_image, best_rot)
+            image_array = np.array(image)
+            image_from_array = Image.fromarray(image_array)
+            # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
 
-        # copy the data from the image array between the segment lines
-        # into the segment_array
-        for i in range(num_rows):
-            r = i + top
-            for c in range(num_cols):
-                _ , top_row = segment_top_path[c]
-                _ , bot_row = segment_bottom_path[c]
-                if r >= top_row and r < bot_row:
-                    segment_array[r-top, c] = image_array[r, c]
+            for index, segment_bottom_path in enumerate(line_segments[1:]):
+                segment_top_path = line_segments[index]
+                segment_top_path = supersample_path(segment_top_path)
+                segment_bottom_path = supersample_path(segment_bottom_path)
 
-        if args.visualize:
-            segment_image = Image.fromarray(segment_array).convert("RGB")
-            # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
-            save_location = f"../Figures/line_segment_{index}.png"
-            segment_image.save(save_location, "PNG")
-            print(f"Saved image to {save_location}")
+                top = image_array.shape[1]
+                bot = 0     
+                # c, r -- because the path has x, y coordinate system instead of r, c
+                for c, r in segment_top_path:
+                    if r < top:
+                        top = r
+                for c, r in segment_bottom_path:
+                    if r > bot:
+                        bot = r
+
+
+                num_rows = bot - top
+                num_cols = len(segment_top_path)
+                segment_array = np.ones((num_rows, num_cols))
+                segment_array *= 255
+
+                # copy the data from the image array between the segment lines
+                # into the segment_array
+                for i in range(num_rows):
+                    r = i + top
+                    for c in range(num_cols):
+                        _ , top_row = segment_top_path[c]
+                        _ , bot_row = segment_bottom_path[c]
+                        if r >= top_row and r < bot_row:
+                            segment_array[r-top, c] = image_array[r, c]
+
+                # if args.visualize:
+                #     segment_image = Image.fromarray(segment_array).convert("RGB")
+                #     # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
+                #     save_location = f"../Figures/line_segment_{filename}_{index}.png"
+                #     segment_image.save(save_location, "PNG")
+                #     print(f"Saved image to {save_location}")
