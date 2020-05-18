@@ -8,6 +8,7 @@ import numpy as np
 import math
 import argparse
 from heapq import heapify, heappop, heappush
+from scipy.signal import savgol_filter
 
 import multiprocessing
 from multiprocessing import Process, Queue
@@ -17,10 +18,10 @@ import visualizer as vis
 
 import time # Debug
 
-def prepare_inverted_image(args, binarized_image):
+def prepare_inverted_image(binarized_image, subsampling_factor):
     # Open the image and invert it
     # We want to invert it for easier histogram-making     
-    resized_image = binarized_image.resize((binarized_image.width//args.subsampling, binarized_image.height//args.subsampling))
+    resized_image = binarized_image.resize((binarized_image.width//subsampling_factor, binarized_image.height//subsampling_factor))
     inverted_image = ImageOps.invert(resized_image)
     return inverted_image
 
@@ -57,10 +58,10 @@ def line_segment(args, image, rotation):
 
     # Create histogram
     histogram = create_histogram(image)
-    sorted_minima = extract_local_minima(histogram)
+    sorted_minima = extract_local_minima(histogram, 10)
     if args.visualize:
-        vis.plot_histogram(histogram, f"../Figures/histogram_{rotation}")
-        vis.plot_histogram(histogram, f"../Figures/histogram_with_extrema_{rotation}", minima=sorted_minima)
+        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
+        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
 
 
     # Some orientation might have different numbers of minima
@@ -85,18 +86,16 @@ def create_histogram(image):
         sum_black_pixels = np.sum(row)
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
-    return hist
+    smooth_hist = savgol_filter(hist, 51, 3)
+    return smooth_hist
 
-def extract_local_minima(histogram):
+def extract_local_minima(histogram, persistence_threshold):
     """Extracts local minima from the histogram based on the persistence1d method.
     This was also done in the A* paper.
     """
 
     # Use persistence to find out local minima
     extrema_with_persistence = RunPersistence(histogram)
-
-    # Arbitrary persistence threshold (handcrafted)
-    persistence_threshold = len(histogram) / 20
 
     # Only take extrema with persistence > threshold
     filtered_extrema = [t[0] for t in extrema_with_persistence if t[1] > persistence_threshold]
@@ -145,8 +144,10 @@ def perform_astar_pathfinding(args, image, minima_rowindices):
     manager = multiprocessing.Manager()
     return_dict = manager.dict()
     jobs = []
-    for row in range(len(minima_rowindices)):
-        p = multiprocessing.Process(target=astar, args=(args, arr, minima_rowindices[row], return_dict))
+    for index, row in enumerate(minima_rowindices[1:-1]):
+        border_top = minima_rowindices[index]
+        border_bot = minima_rowindices[index+2]
+        p = multiprocessing.Process(target=astar, args=(args, arr, row, border_top, border_bot, return_dict))
         jobs.append(p)
         p.start()
 
@@ -154,9 +155,17 @@ def perform_astar_pathfinding(args, image, minima_rowindices):
         proc.join()
     astar_paths = return_dict.values()
 
+    # Because we used multiple cores, the astar_paths are not sorted
+    # So we sort them based on the y coordinate of the first element in each path
+    for path in astar_paths.copy():
+        _, y = path[0]
+        correct_index = minima_rowindices.index(y//args.subsampling)
+        astar_paths[correct_index - 1] = path
+
+
     return astar_paths
 
-def astar(args, img_arr, line_num, return_dict):
+def astar(args, img_arr, line_num, border_top, border_bot, return_dict):
     print(f"Computing A*-path for row: {line_num}")
     # The start node starts with H(n) = width of image
     # The start node start with F(n) = G'(n) + H(n)
@@ -190,7 +199,7 @@ def astar(args, img_arr, line_num, return_dict):
             return_dict[line_num] = path[::-1]
             break
 
-        neighbours = get_neighbours(img_arr, current_node)
+        neighbours = get_neighbours(img_arr, current_node, line_num, border_top, border_bot)
 
         for neighbour_cost, neighbour in neighbours:
             inserted = False
@@ -198,7 +207,7 @@ def astar(args, img_arr, line_num, return_dict):
                 # Calculate g, h and f values
                 d_cost = args.CONST_C / (1 + min_dist_cost(img_arr, neighbour))
                 neighbour.g = neighbour_cost + d_cost
-                neighbour.h = np.linalg.norm(end_node.position - neighbour.position)
+                neighbour.h = 10 * np.linalg.norm(neighbour.position - end_node.position)
                 neighbour.f = neighbour.g + neighbour.h
 
                 if (neighbour not in top_options) or (top_options[neighbour.__hash__] > neighbour.f):
@@ -208,10 +217,10 @@ def astar(args, img_arr, line_num, return_dict):
                     print("Skip")
                 
 
-def get_neighbours(img_arr, current_node):
+def get_neighbours(img_arr, current_node, line_num, border_top, border_bot):
     """Gets the neighbouring nodes together with the neighbour cost"""
     neighbours = []
-    possible_moves = np.array([[0, 1], [-1, 0], [1, 0], [1, 1], [-1, 1]])
+    possible_moves = np.array([[0, 1], [1, 1], [-1, 1], [-1, 0], [1, 0]])
     for move in possible_moves:
 
         neighbour_pos = current_node.position + move
@@ -221,10 +230,19 @@ def get_neighbours(img_arr, current_node):
             # New position is out of bounds! Ignore this move
             continue
 
+        if r <= border_top or r >= border_bot:
+            # New position is out of bounds! Ignore this move
+            continue
+
         new_node = Node(parent=current_node, position=neighbour_pos)
         if np.array_equal(move, np.array([1, 1])) or np.array_equal(move, np.array([-1, 1])):
             # Neighbour cost is 14 when moving diagonally
-            neighbours.append((14, new_node))
+            # But 9 when moving diagonally towards the line_num
+            if abs(r - line_num) > abs(current_node.position[0] - line_num):
+                neighbours.append((14, new_node))
+            else:
+                # Testing this! TODO: EITHER REMOVE THIS OR LET IT STAY IF IT WORKS
+                neighbours.append((9, new_node))
         else:
             # Neighbour cost is 10 when moving up, down or to the right
             neighbours.append((10, new_node))
@@ -254,11 +272,48 @@ def min_dist_cost(img_arr, node):
         else:
             dist_down += 1
 
-
     if not breaked_up and not breaked_down:
         return max_value
     else:
         return min(dist_up, dist_down)
+
+def supersample_path(path):
+    """This function fills in the spaces between coordinate pairs in a path.
+    If path = [(0,0), (0,4)], this function will return
+    [(0,0), (0,1), (0,2), (0,3), (0,4)]"""
+    coords_added = 0
+    for index, coords in enumerate(path[1:]):
+        # Check whether the next 
+        prev_coords = path[index + coords_added]
+        # r and c are swapepd in this path
+        prev_c, prev_r = prev_coords
+        c, r = coords
+        # There are 5 cases (derived from the 5 possible moves an agent can make)
+        # Case 1: The r coordinate is the same, but not the c
+        if prev_r == r and c > prev_c:
+            for i in range(1, c - prev_c):
+                path.insert(index + coords_added + 1, (prev_c + i, prev_r))
+                coords_added += 1
+
+        # Case 2: The r coordinate is larger than the previous r
+        elif prev_r > r and c > prev_c:
+            for i in range(1, c - prev_c):
+                path.insert(index + coords_added + 1, (prev_c + i, prev_r - i))
+                coords_added += 1
+
+        # Case 3: The r coordinate is smaller than the previous r
+        elif prev_r < r and c > prev_c:
+            for i in range(1, c - prev_c):
+                path.insert(index + coords_added + 1, (prev_c + i, prev_r + i))
+                coords_added += 1
+
+        # Case 4 and 5 we dont need to supersample, since we only need 1 coordinate pair for each c
+        # However, we still need to delete the previous coords in these cases
+        elif prev_r != r and c == prev_c:
+            path.pop(index + coords_added)
+            coords_added -= 1
+
+    return path
 
 if __name__ == "__main__":
     # This is test code and should be removed later
@@ -266,7 +321,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
     parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
-    parser.add_argument("--CONST_C", type=int, default=-50, help="The constant C in the formula for D(n). See A* paper.")
+    parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
     args = parser.parse_args()
     if not args.visualize:
@@ -280,7 +335,7 @@ if __name__ == "__main__":
             break
 
     binarized_image = Image.open(os.path.join(args.testdata, filename))
-    inverted_image = prepare_inverted_image(args, binarized_image)
+    inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
     best_rot, minima_rowindices = find_best_rotation(inverted_image)
     image = rotate_invert_image(inverted_image, best_rot)
 
@@ -292,13 +347,57 @@ if __name__ == "__main__":
     if args.visualize:
         vis.draw_straight_lines(image, minima_rowindices)
 
-    astar_paths = perform_astar_pathfinding(args, image, minima_rowindices)
+    line_segments = perform_astar_pathfinding(args, image, minima_rowindices)
 
-    # We now have the A* paths, which is our line segmentation
+    # We now have the A* paths in the horizontal direction,
+    # which is our line segmentation
+
+    # We now have the A* paths in the vertical direction,
+    # which is our character zone segmentation
     if args.visualize:
         inverted_original_image = ImageOps.invert(binarized_image)
         rotated_original_image = inverted_original_image.rotate(best_rot)
         inverted_inverted_image = ImageOps.invert(rotated_original_image)
-        vis.draw_astar_lines(inverted_inverted_image, astar_paths)
+        vis.draw_astar_lines(inverted_inverted_image, line_segments)
 
-    # We can now segment each line into character zones
+
+    inverted_image = prepare_inverted_image(binarized_image, 1)
+    image = rotate_invert_image(inverted_image, best_rot)
+    image_array = np.array(image)
+    image_from_array = Image.fromarray(image_array)
+    image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
+
+    for index, segment_bottom_path in enumerate(line_segments[1:]):
+        segment_top_path = line_segments[index]
+        segment_top_path = supersample_path(segment_top_path)
+        segment_bottom_path = supersample_path(segment_bottom_path)
+
+        top = image_array.shape[1]
+        bot = 0     
+        # c, r -- because the path has x, y coordinate system instead of r, c
+        for c, r in segment_top_path:
+            if r < top:
+                top = r
+        for c, r in segment_bottom_path:
+            if r > bot:
+                bot = r
+
+
+        num_rows = bot - top
+        num_cols = len(segment_top_path)
+        segment_array = np.ones((num_rows, num_cols))
+        segment_array *= 255
+
+        # copy the data from the image array between the segment lines
+        # into the segment_array
+        for i in range(num_rows):
+            r = i + top
+            for c in range(num_cols):
+                _ , top_row = segment_top_path[c]
+                _ , bot_row = segment_bottom_path[c]
+                if r >= top_row and r < bot_row:
+                    segment_array[r-top, c] = image_array[r, c]
+
+        segment_image = Image.fromarray(segment_array)
+        segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
+

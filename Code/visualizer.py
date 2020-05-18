@@ -55,14 +55,20 @@ def draw_straight_lines(image, best_minima_rowindices, save_location="../Figures
     image.save(save_location, "PNG")
     print(f"Saved image to {save_location}")
 
-def draw_astar_lines(image, astar_paths, save_location="../Figures/astar_line_segments.png"):
+def draw_astar_lines(image, astar_paths, 
+                     save_location="../Figures/astar_line_segments.png",
+                     color="#FF0000",
+                     width=None):
     """Draws paths on image that signify the segmented lines.
     Saves the drawn on image to the save_location, which is
     set to '../Figures/astar_line_segments.png' by default.
     """
+    if width is None:
+        width = image.height//150
+
     drawer = ImageDraw.Draw(image)
     for path in astar_paths:
-        drawer.line(path, fill="#FF0000", width=image.height//150)
+        drawer.line(path, fill=color, width=width)
 
     image.save(save_location, "PNG")
     print(f"Saved image to {save_location}")
