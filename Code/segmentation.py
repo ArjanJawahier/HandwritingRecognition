@@ -365,7 +365,7 @@ if __name__ == "__main__":
     image = rotate_invert_image(inverted_image, best_rot)
     image_array = np.array(image)
     image_from_array = Image.fromarray(image_array)
-    image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
+    # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
 
     for index, segment_bottom_path in enumerate(line_segments[1:]):
         segment_top_path = line_segments[index]
@@ -398,6 +398,9 @@ if __name__ == "__main__":
                 if r >= top_row and r < bot_row:
                     segment_array[r-top, c] = image_array[r, c]
 
-        segment_image = Image.fromarray(segment_array)
-        segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
-
+        if args.visualize:
+            segment_image = Image.fromarray(segment_array).convert("RGB")
+            # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
+            save_location = f"../Figures/line_segment_{index}.png"
+            segment_image.save(save_location, "PNG")
+            print(f"Saved image to {save_location}")
