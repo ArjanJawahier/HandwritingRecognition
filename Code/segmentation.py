@@ -57,8 +57,9 @@ def line_segment(args, image, rotation):
     """
 
     # Create histogram
-    histogram = create_histogram(image)
-    sorted_minima = extract_local_minima(histogram, 10)
+    image_array = np.array(image)
+    histogram = create_histogram(image_array)
+    sorted_minima = extract_local_minima(histogram, persistence_threshold=10)
     if args.visualize:
         vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
         vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
@@ -71,7 +72,7 @@ def line_segment(args, image, rotation):
     avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
     return sorted_minima, avg_of_local_minima
 
-def create_histogram(image):
+def create_histogram(image_array, smooth=51):
     """This function takes a binarized image,
     normalizes it and returns a 
     histogram of black pixels per row.
@@ -79,17 +80,16 @@ def create_histogram(image):
     def normalize_mapping(x):
         return x//255
 
-    arr = np.array(image)
-    arr = np.array(list(map(normalize_mapping, arr)))
+    arr = np.array(list(map(normalize_mapping, image_array)))
     hist_list = []
     for row in arr:
         sum_black_pixels = np.sum(row)
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
-    smooth_hist = savgol_filter(hist, 51, 3)
+    smooth_hist = savgol_filter(hist, smooth, 3)
     return smooth_hist
 
-def extract_local_minima(histogram, persistence_threshold):
+def extract_local_minima(histogram, persistence_threshold=10):
     """Extracts local minima from the histogram based on the persistence1d method.
     This was also done in the A* paper.
     """
@@ -131,13 +131,12 @@ class Node:
     def __repr__(self):
         return f"(pos: {self.position}, f: {self.f})"
 
-def perform_astar_pathfinding(args, image, minima_rowindices):
+def perform_astar_pathfinding(args, image_array, minima_rowindices):
 
     def normalize_mapping(x):
         return x//255
 
-    arr = np.array(image)
-    arr = np.array(list(map(normalize_mapping, arr)))
+    arr = np.array(list(map(normalize_mapping, image_array)))
     print(arr.shape)
     astar_paths = []
 
@@ -277,6 +276,14 @@ def min_dist_cost(img_arr, node):
     else:
         return min(dist_up, dist_down)
 
+def supersample_paths(paths):
+    """Calls the supersample_path function on a list of paths"""
+    supersampled_paths = []
+    for path in paths:
+        path = supersample_path(path)
+        supersampled_paths.append(path)
+    return supersampled_paths
+
 def supersample_path(path):
     """This function fills in the spaces between coordinate pairs in a path.
     If path = [(0,0), (0,4)], this function will return
@@ -347,13 +354,11 @@ if __name__ == "__main__":
     if args.visualize:
         vis.draw_straight_lines(image, minima_rowindices)
 
-    line_segments = perform_astar_pathfinding(args, image, minima_rowindices)
-
+    image_array = np.array(image)
+    line_segments = perform_astar_pathfinding(args, image_array, minima_rowindices)
+    line_segments = supersample_paths(line_segments)
     # We now have the A* paths in the horizontal direction,
     # which is our line segmentation
-
-    # We now have the A* paths in the vertical direction,
-    # which is our character zone segmentation
     if args.visualize:
         inverted_original_image = ImageOps.invert(binarized_image)
         rotated_original_image = inverted_original_image.rotate(best_rot)
@@ -366,11 +371,19 @@ if __name__ == "__main__":
     image_array = np.array(image)
     image_from_array = Image.fromarray(image_array)
     # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
+    # If we do not insert these dummy paths, we lose the first and last line segments
+    num_cols = len(line_segments[0])
+    dummy_top_path = [(i, 0) for i in range(num_cols)]
+    dummy_bot_path = [(i, image_array.shape[0] - 1) for i in range(num_cols)]
+    line_segments.insert(0, dummy_top_path)
+    line_segments.append(dummy_bot_path)
 
+
+    segment_arrays = []
     for index, segment_bottom_path in enumerate(line_segments[1:]):
         segment_top_path = line_segments[index]
-        segment_top_path = supersample_path(segment_top_path)
-        segment_bottom_path = supersample_path(segment_bottom_path)
+        # segment_top_path = supersample_path(segment_top_path)
+        # segment_bottom_path = supersample_path(segment_bottom_path)
 
         top = image_array.shape[1]
         bot = 0     
@@ -382,9 +395,7 @@ if __name__ == "__main__":
             if r > bot:
                 bot = r
 
-
         num_rows = bot - top
-        num_cols = len(segment_top_path)
         segment_array = np.ones((num_rows, num_cols))
         segment_array *= 255
 
@@ -398,9 +409,33 @@ if __name__ == "__main__":
                 if r >= top_row and r < bot_row:
                     segment_array[r-top, c] = image_array[r, c]
 
+        segment_arrays.append(segment_array)
+
         if args.visualize:
             segment_image = Image.fromarray(segment_array).convert("RGB")
             # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
             save_location = f"../Figures/line_segment_{index}.png"
             segment_image.save(save_location, "PNG")
             print(f"Saved image to {save_location}")
+
+    # Character segmentation starts here
+    for index, segment_array in enumerate(segment_arrays):
+        # Steps to perform character zone segmentation:
+        # Rotate 90 degrees
+        rotated_segment_array = np.rot90(segment_array)
+
+        # Perform histogram computation
+        segment_histogram = create_histogram(rotated_segment_array, smooth=51)
+
+        # Find local minima
+        segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
+        print(segment_local_minima)
+        # Perform astar
+        args.subsampling = 1
+        zone_segments = perform_astar_pathfinding(args, rotated_segment_array, segment_local_minima)
+        # Rotate -90 degrees
+
+        if args.visualize:
+            segment_array_image = Image.fromarray(rotated_segment_array).convert("RGB")
+            vis.draw_astar_lines(segment_array_image, zone_segments, width=10,
+                                 save_location=f"../Figures/line_segment_{index}_with_zones.png")
