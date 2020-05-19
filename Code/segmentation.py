@@ -344,6 +344,9 @@ if __name__ == "__main__":
             # And we also have the minima rowindices for rotated test image.
             print("minima ", minima_rowindices)
 
+            minima_rowindices.insert(0,0)
+            minima_rowindices.append(np.array(inverted_image).shape[0]-1)
+
             # We can draw lines at the mimima rowindices in the rotated image
             if args.visualize:
                 vis.draw_straight_lines(image, minima_rowindices, "../Figures/straight_"+ filename + ".png")
@@ -401,9 +404,9 @@ if __name__ == "__main__":
                         if r >= top_row and r < bot_row:
                             segment_array[r-top, c] = image_array[r, c]
 
-                # if args.visualize:
-                #     segment_image = Image.fromarray(segment_array).convert("RGB")
-                #     # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
-                #     save_location = f"../Figures/line_segment_{filename}_{index}.png"
-                #     segment_image.save(save_location, "PNG")
-                #     print(f"Saved image to {save_location}")
+                if args.visualize:
+                    segment_image = Image.fromarray(segment_array).convert("RGB")
+                    # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
+                    save_location = f"../Figures/line_segment_{filename}_{index}.png"
+                    segment_image.save(save_location, "PNG")
+                    print(f"Saved image to {save_location}")
