@@ -80,7 +80,15 @@ def create_histogram(image_array, smooth=51):
     def normalize_mapping(x):
         return x//255
 
+    def invert_mapping(x):
+        return (x - 1) * -1
+
     arr = np.array(list(map(normalize_mapping, image_array)))
+
+    if arr[0, 0] != 0:
+        # Most likely, this array has not been inverted yet
+        arr = np.array(list(map(invert_mapping, arr)))
+
     hist_list = []
     for row in arr:
         sum_black_pixels = np.sum(row)
@@ -322,6 +330,36 @@ def supersample_path(path):
 
     return path
 
+def segment_characters(line_segment_arrays, args):
+    zone_segments_list = []
+
+    for index, segment_array in enumerate(line_segment_arrays):
+        # Steps to perform character zone segmentation:
+        # Rotate 90 degrees
+        rotated_segment_array = np.rot90(segment_array)
+
+        # Perform histogram computation
+        segment_histogram = create_histogram(rotated_segment_array, smooth=51)
+
+        # Find local minima
+        segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
+        print(segment_local_minima)
+        # Perform astar
+        # args.subsampling = 1
+        # args.CONST_C = -8000
+        print(rotated_segment_array.shape)
+        zone_segments = perform_astar_pathfinding(args, rotated_segment_array, segment_local_minima)
+        zone_segments_list.append(zone_segments)
+        # Rotate -90 degrees
+
+        if args.visualize:
+            vis.plot_histogram(segment_histogram, f"../Figures/character_histogram_{index}.png")
+            segment_array_image = Image.fromarray(rotated_segment_array).convert("RGB")
+            vis.draw_astar_lines(segment_array_image, zone_segments, width=3,
+                                 save_location=f"../Figures/line_segment_{index}_with_zones.png")
+
+    return zone_segments_list
+
 if __name__ == "__main__":
     # This is test code and should be removed later
     # After it works
@@ -419,23 +457,4 @@ if __name__ == "__main__":
             print(f"Saved image to {save_location}")
 
     # Character segmentation starts here
-    for index, segment_array in enumerate(segment_arrays):
-        # Steps to perform character zone segmentation:
-        # Rotate 90 degrees
-        rotated_segment_array = np.rot90(segment_array)
-
-        # Perform histogram computation
-        segment_histogram = create_histogram(rotated_segment_array, smooth=51)
-
-        # Find local minima
-        segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
-        print(segment_local_minima)
-        # Perform astar
-        args.subsampling = 1
-        zone_segments = perform_astar_pathfinding(args, rotated_segment_array, segment_local_minima)
-        # Rotate -90 degrees
-
-        if args.visualize:
-            segment_array_image = Image.fromarray(rotated_segment_array).convert("RGB")
-            vis.draw_astar_lines(segment_array_image, zone_segments, width=10,
-                                 save_location=f"../Figures/line_segment_{index}_with_zones.png")
+    character_zone_segments = segment_characters(segment_arrays, args)
