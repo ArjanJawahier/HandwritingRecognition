@@ -18,35 +18,36 @@ import visualizer as vis
 
 import time # Debug
 
-def prepare_inverted_image(binarized_image, subsampling_factor):
+def prepare_inverted_image(binarized_image, subsampling):
     # Open the image and invert it
     # We want to invert it for easier histogram-making     
-    resized_image = binarized_image.resize((binarized_image.width//subsampling_factor, binarized_image.height//subsampling_factor))
+    resized_image = binarized_image.resize((binarized_image.width//subsampling, binarized_image.height//subsampling))
     inverted_image = ImageOps.invert(resized_image)
     return inverted_image
 
-def find_best_rotation(image):
+def find_best_rotation(image, args):
     """Find out what the minimal average number of black pixels (or white pixels in inverted images)
     is per row, for various rotated versions of the input test image
     TODO: Streamline this (Hough transform?)
     """
     min_avg = np.inf
-    # for rotation in range(-6, 6, 1):
-    for rotation in [5]: # found that 5 was the best in this test case
-        rotated_image = inverted_image.rotate(rotation)
-        minima_rowindices, avg_of_local_minima = line_segment(args, rotated_image, rotation)
+    for rotation in range(-6, 6, 1):
+    # for rotation in [5]: # found that 5 was the best in my test case
+        rotated_image = image.rotate(rotation)
+        minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation, args.visualize, args.persistence_threshold)
         if avg_of_local_minima < min_avg:
             min_avg = avg_of_local_minima
             best_rot = rotation
             best_minima_rowindices = minima_rowindices
-    return best_rot, minima_rowindices
+    print(f"Best rotation: {best_rot}")
+    return best_rot, best_minima_rowindices
 
 def rotate_invert_image(image, rotation):
     rotated_image = image.rotate(rotation)
     inverted_rotated_image = ImageOps.invert(rotated_image)
     return inverted_rotated_image
 
-def line_segment(args, image, rotation):
+def line_segment(image, rotation, visualize, persistence_threshold):
     """This function segments the binarized image
     into horizontal lines of text, using the A*
     algorithm outlined in:
@@ -59,8 +60,8 @@ def line_segment(args, image, rotation):
     # Create histogram
     image_array = np.array(image)
     histogram = create_histogram(image_array)
-    sorted_minima = extract_local_minima(histogram, persistence_threshold=10)
-    if args.visualize:
+    sorted_minima = extract_local_minima(histogram, persistence_threshold=persistence_threshold)
+    if visualize:
         vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
         vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
 
@@ -72,7 +73,7 @@ def line_segment(args, image, rotation):
     avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
     return sorted_minima, avg_of_local_minima
 
-def create_histogram(image_array, smooth=51):
+def create_histogram(image_array, smooth=21):
     """This function takes a binarized image,
     normalizes it and returns a 
     histogram of black pixels per row.
@@ -95,6 +96,7 @@ def create_histogram(image_array, smooth=51):
         hist_list.append(sum_black_pixels)
     hist = np.array(hist_list)
     smooth_hist = savgol_filter(hist, smooth, 3)
+
     return smooth_hist
 
 def extract_local_minima(histogram, persistence_threshold=10):
@@ -139,7 +141,7 @@ class Node:
     def __repr__(self):
         return f"(pos: {self.position}, f: {self.f})"
 
-def perform_astar_pathfinding(args, image_array, minima_rowindices):
+def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampling):
 
     def normalize_mapping(x):
         return x//255
@@ -154,7 +156,7 @@ def perform_astar_pathfinding(args, image_array, minima_rowindices):
     for index, row in enumerate(minima_rowindices[1:-1]):
         border_top = minima_rowindices[index]
         border_bot = minima_rowindices[index+2]
-        p = multiprocessing.Process(target=astar, args=(args, arr, row, border_top, border_bot, return_dict))
+        p = multiprocessing.Process(target=astar, args=(arr, row, border_top, border_bot, return_dict, const_c, subsampling))
         jobs.append(p)
         p.start()
 
@@ -166,13 +168,13 @@ def perform_astar_pathfinding(args, image_array, minima_rowindices):
     # So we sort them based on the y coordinate of the first element in each path
     for path in astar_paths.copy():
         _, y = path[0]
-        correct_index = minima_rowindices.index(y//args.subsampling)
+        correct_index = minima_rowindices.index(y//subsampling)
         astar_paths[correct_index - 1] = path
 
 
     return astar_paths
 
-def astar(args, img_arr, line_num, border_top, border_bot, return_dict):
+def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsampling):
     print(f"Computing A*-path for row: {line_num}")
     # The start node starts with H(n) = width of image
     # The start node start with F(n) = G'(n) + H(n)
@@ -198,7 +200,7 @@ def astar(args, img_arr, line_num, border_top, border_bot, return_dict):
             path = []
             current = current_node
             while current is not None:
-                position = current.position * args.subsampling
+                position = current.position * subsampling
                 r, c = position
                 position = (c, r)
                 path.append(position)
@@ -212,7 +214,7 @@ def astar(args, img_arr, line_num, border_top, border_bot, return_dict):
             inserted = False
             if neighbour not in expanded_nodes:
                 # Calculate g, h and f values
-                d_cost = args.CONST_C / (1 + min_dist_cost(img_arr, neighbour))
+                d_cost = const_c / (1 + min_dist_cost(img_arr, neighbour))
                 neighbour.g = neighbour_cost + d_cost
                 neighbour.h = 10 * np.linalg.norm(neighbour.position - end_node.position)
                 neighbour.f = neighbour.g + neighbour.h
@@ -344,11 +346,9 @@ def segment_characters(line_segment_arrays, args):
         # Find local minima
         segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
         print(segment_local_minima)
-        # Perform astar
-        # args.subsampling = 1
-        # args.CONST_C = -8000
+        # Perform A*
         print(rotated_segment_array.shape)
-        zone_segments = perform_astar_pathfinding(args, rotated_segment_array, segment_local_minima)
+        zone_segments = perform_astar_pathfinding(rotated_segment_array, segment_local_minima, args.CONST_C_CHAR, args.subsampling_char)
         zone_segments_list.append(zone_segments)
         # Rotate -90 degrees
 
@@ -360,7 +360,7 @@ def segment_characters(line_segment_arrays, args):
 
     return zone_segments_list
 
-if __name__ == "__main__":
+def main():
     # This is test code and should be removed later
     # After it works
     parser = argparse.ArgumentParser()
@@ -368,6 +368,9 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
     parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
+    parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
+    parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
+    parser.add_argument("-p", "--persistence_threshold", type=int, default=2, help="The persistence threshold for finding local extrema.")
     args = parser.parse_args()
     if not args.visualize:
         print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
@@ -375,13 +378,14 @@ if __name__ == "__main__":
     # Get an example test image (arbitrarily picked)
     test_filenames = os.listdir(args.testdata)
     for f in test_filenames:
-        if "binarized" in f:
+        # if "binarized" in f:
+        if "P106-Fg002-R-C01-R01-binarized" in f:
             filename = f
             break
 
     binarized_image = Image.open(os.path.join(args.testdata, filename))
     inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
-    best_rot, minima_rowindices = find_best_rotation(inverted_image)
+    best_rot, minima_rowindices = find_best_rotation(inverted_image, args)
     image = rotate_invert_image(inverted_image, best_rot)
 
     # At this point, we have the best rotation for the input test image
@@ -393,7 +397,7 @@ if __name__ == "__main__":
         vis.draw_straight_lines(image, minima_rowindices)
 
     image_array = np.array(image)
-    line_segments = perform_astar_pathfinding(args, image_array, minima_rowindices)
+    line_segments = perform_astar_pathfinding(image_array, minima_rowindices, args.CONST_C, args.subsampling)
     line_segments = supersample_paths(line_segments)
     # We now have the A* paths in the horizontal direction,
     # which is our line segmentation
@@ -458,3 +462,6 @@ if __name__ == "__main__":
 
     # Character segmentation starts here
     character_zone_segments = segment_characters(segment_arrays, args)
+
+if __name__ == "__main__":
+    main()
