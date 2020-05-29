@@ -353,7 +353,6 @@ def segment_characters(line_segment_arrays, args):
         zone_segments = perform_astar_pathfinding(rotated_segment_array, segment_local_minima, args.CONST_C_CHAR, args.subsampling_char)
         zone_segments_list.append(zone_segments)
         # Rotate -90 degrees
-
         if args.visualize:
             vis.plot_histogram(segment_histogram, f"../Figures/character_histogram_{index}.png")
             segment_array_image = Image.fromarray(rotated_segment_array).convert("RGB")
@@ -361,6 +360,71 @@ def segment_characters(line_segment_arrays, args):
                                  save_location=f"../Figures/line_segment_{index}_with_zones.png")
 
     return zone_segments_list
+
+def save_char_segments(character_zone_segments, segment_arrays):
+    b=0
+    for image in character_zone_segments: #go over every individual image
+        for n in range(len(image)+1): #go over every line in the image plus one to get 4 areas for 3 lines that are saved
+            max_x = 0
+            min_y = 0
+            line_array = []
+            edit_line_array = []
+            if n == (len(image)): # case when the area is form the top of the image to the previous red line
+                min_y = len(segment_arrays[b][1]) # these values are used to initialize a 2d array with the sizes of the furthest outsticking line parts
+                max_x = len(segment_arrays[b])
+                max_y = save_max_y
+            else:
+                prev = np.inf
+                for x in range(len(image[n])): # this for loop find the dimensions of the array which copies the character
+                    if image[n][x][1] > min_y:
+                        min_y = image[n][x][1]
+                    if image[n][x][0] > max_x:
+                        max_x = image[n][x][0]
+                    if x > 0:
+                        if image[n][x][0] != prev:
+                            line_array.append(image[n][x])   #line_array saves all the line values that do not lie vertically above each other
+                    else:
+                       line_array.append(image[n][x])
+                    prev = image[n][x][0]
+                if n > 0: # if the area under any other than the first red line is to be saved
+                    max_y = np.inf
+                    for z in range(len(image[n-1])):
+                        if image[n-1][z][1] < max_y:
+                             max_y = image[n-1][z][1]
+            if n > 0:
+                save_max_y = max_y #save the highest laying value of this line
+            if n == 0: #if it is the first red line
+                array = [[255 for col in range(max_x+1)] for row in range(min_y)] #fill the array of the correct size with white pixel values
+            elif n == len(image): #if it is the last red line
+                array = [[255 for col in range(max_x+1)] for row in range(len(segment_arrays[b][0])-max_y)]
+            else: #if it is any of the inbetween red lines
+                array = [[255 for col in range(max_x+1)] for row in range(min_y-max_y)]
+
+            for h in range(len(line_array)): #flip the y values since the image is turned on its side in segment_arrays
+                dis = len(segment_arrays[b][0])-line_array[h][1]
+                edit_line_array.append((line_array[h][0],dis))
+
+            min_y = len(segment_arrays[b][0]) - min_y #flip this value as well because of the turning of the image
+
+            for i in range(len(edit_line_array)): #go over every segment and save the pixel values in array
+                if n == 0: #if it is the first red line
+                    for j in range(edit_line_array[i][1],len(segment_arrays[b][0])): # goes over the y-values to and from the red lines
+                        array[j-min_y][i] = segment_arrays[b][i][j]
+                elif n == len(image): #if it is the last red line
+                    for j in range(prev_line_array[i][1]):
+                        array[j][i] = segment_arrays[b][i][j]
+                else: #if it is any of the inbetween red lines
+                    for j in range(edit_line_array[i][1],prev_line_array[i][1]):
+                        array[j-min_y][i] = segment_arrays[b][i][j]
+
+            array = np.asarray(array)
+            character_image = Image.fromarray(array).convert("RGB") #convert the array to an image and save it
+            save_location = f"../Figures/char_segment_{b}_{n}.png"
+            character_image.save(save_location, "PNG")
+            print(f"Saved image to {save_location}")
+            prev_line_array = edit_line_array
+        b=b+1
+    
 
 def main():
     # This is test code and should be removed later
@@ -457,12 +521,16 @@ def main():
         if args.visualize:
             segment_image = Image.fromarray(segment_array).convert("RGB")
             # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
+            #segment_image = segment_image.rotate(90)
             save_location = f"../Figures/line_segment_{index}.png"
             segment_image.save(save_location, "PNG")
             print(f"Saved image to {save_location}")
 
     # Character segmentation starts here
     character_zone_segments = segment_characters(segment_arrays, args)
+    save_char_segments(character_zone_segments, segment_arrays)
+
+
 
 if __name__ == "__main__":
     main()

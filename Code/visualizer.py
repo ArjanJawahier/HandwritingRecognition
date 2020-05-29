@@ -69,6 +69,7 @@ def draw_astar_lines(image, astar_paths,
     drawer = ImageDraw.Draw(image)
     for path in astar_paths:
         drawer.line(path, fill=color, width=width)
+    #image = image.rotate(90)
 
     image.save(save_location, "PNG")
     print(f"Saved image to {save_location}")
