@@ -10,13 +10,11 @@ import math
 import argparse
 from heapq import heapify, heappop, heappush
 from scipy.signal import savgol_filter
-
 import multiprocessing
 from multiprocessing import Process, Queue
-
 from persistence.persistence1d import RunPersistence
 import visualizer as vis
-
+import util
 import time # Debug
 
 def prepare_inverted_image(binarized_image, subsampling):
@@ -29,11 +27,11 @@ def prepare_inverted_image(binarized_image, subsampling):
 def find_best_rotation(image, args):
     """Find out what the minimal average number of black pixels (or white pixels in inverted images)
     is per row, for various rotated versions of the input test image
-    TODO: Streamline this (Hough transform?)
+    MIGHTDO: Streamline this (Hough transform?)
     """
     min_avg = np.inf
-    for rotation in range(-6, 6, 1):
-    # for rotation in [5]: # found that 5 was the best in my test case
+    # for rotation in range(-6, 6, 1):
+    for rotation in [1]: # found that 1 was the best in my test case
         rotated_image = image.rotate(rotation)
         minima_rowindices, avg_of_local_minima = line_segment(rotated_image, rotation, args.visualize, args.persistence_threshold)
         if avg_of_local_minima < min_avg:
@@ -63,8 +61,8 @@ def line_segment(image, rotation, visualize, persistence_threshold):
     histogram = create_histogram(image_array)
     sorted_minima = extract_local_minima(histogram, persistence_threshold=persistence_threshold)
     if visualize:
-        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_{rotation}")
-        vis.plot_histogram(histogram, f"../Figures/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
+        vis.plot_histogram(histogram, f"../Figures/line_histograms/smoothed_histogram_{rotation}")
+        vis.plot_histogram(histogram, f"../Figures/line_histograms/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
 
 
     # Some orientation might have different numbers of minima
@@ -149,7 +147,6 @@ def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampli
         return x//255
 
     arr = np.array(list(map(normalize_mapping, image_array)))
-    print(arr.shape)
     astar_paths = []
 
     manager = multiprocessing.Manager()
@@ -334,158 +331,7 @@ def supersample_path(path):
 
     return path
 
-def segment_characters(line_segment_arrays, args):
-    zone_segments_list = []
-
-    for index, segment_array in enumerate(line_segment_arrays):
-        # Steps to perform character zone segmentation:
-        # Rotate 90 degrees
-        rotated_segment_array = np.rot90(segment_array)
-
-        # Perform histogram computation
-        segment_histogram = create_histogram(rotated_segment_array, smooth=51)
-
-        # Find local minima
-        segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
-        print(segment_local_minima)
-        # Perform A*
-        print(rotated_segment_array.shape)
-        zone_segments = perform_astar_pathfinding(rotated_segment_array, segment_local_minima, args.CONST_C_CHAR, args.subsampling_char)
-        zone_segments_list.append(zone_segments)
-        # Rotate -90 degrees
-        if args.visualize:
-            vis.plot_histogram(segment_histogram, f"../Figures/character_histogram_{index}.png")
-            segment_array_image = Image.fromarray(rotated_segment_array).convert("RGB")
-            vis.draw_astar_lines(segment_array_image, zone_segments, width=3,
-                                 save_location=f"../Figures/line_segment_{index}_with_zones.png")
-
-    return zone_segments_list
-
-def save_char_segments(character_zone_segments, segment_arrays):
-    b=0
-    for image in character_zone_segments: #go over every individual image
-        for n in range(len(image)+1): #go over every line in the image plus one to get 4 areas for 3 lines that are saved
-            max_x = 0
-            min_y = 0
-            line_array = []
-            edit_line_array = []
-            if n == (len(image)): # case when the area is form the top of the image to the previous red line
-                min_y = len(segment_arrays[b][1]) # these values are used to initialize a 2d array with the sizes of the furthest outsticking line parts
-                max_x = len(segment_arrays[b])
-                max_y = save_max_y
-            else:
-                prev = np.inf
-                for x in range(len(image[n])): # this for loop find the dimensions of the array which copies the character
-                    if image[n][x][1] > min_y:
-                        min_y = image[n][x][1]
-                    if image[n][x][0] > max_x:
-                        max_x = image[n][x][0]
-                    if x > 0:
-                        if image[n][x][0] != prev:
-                            line_array.append(image[n][x])   #line_array saves all the line values that do not lie vertically above each other
-                    else:
-                       line_array.append(image[n][x])
-                    prev = image[n][x][0]
-                if n > 0: # if the area under any other than the first red line is to be saved
-                    max_y = np.inf
-                    for z in range(len(image[n-1])):
-                        if image[n-1][z][1] < max_y:
-                             max_y = image[n-1][z][1]
-            if n > 0:
-                save_max_y = max_y #save the highest laying value of this line
-            if n == 0: #if it is the first red line
-                array = [[255 for col in range(max_x+1)] for row in range(min_y)] #fill the array of the correct size with white pixel values
-            elif n == len(image): #if it is the last red line
-                array = [[255 for col in range(max_x+1)] for row in range(len(segment_arrays[b][0])-max_y)]
-            else: #if it is any of the inbetween red lines
-                array = [[255 for col in range(max_x+1)] for row in range(min_y-max_y)]
-
-            for h in range(len(line_array)): #flip the y values since the image is turned on its side in segment_arrays
-                dis = len(segment_arrays[b][0])-line_array[h][1]
-                edit_line_array.append((line_array[h][0],dis))
-
-            min_y = len(segment_arrays[b][0]) - min_y #flip this value as well because of the turning of the image
-
-            for i in range(len(edit_line_array)): #go over every segment and save the pixel values in array
-                if n == 0: #if it is the first red line
-                    for j in range(edit_line_array[i][1],len(segment_arrays[b][0])): # goes over the y-values to and from the red lines
-                        array[j-min_y][i] = segment_arrays[b][i][j]
-                elif n == len(image): #if it is the last red line
-                    for j in range(prev_line_array[i][1]):
-                        array[j][i] = segment_arrays[b][i][j]
-                else: #if it is any of the inbetween red lines
-                    for j in range(edit_line_array[i][1],prev_line_array[i][1]):
-                        array[j-min_y][i] = segment_arrays[b][i][j]
-
-            array = np.asarray(array)
-            character_image = Image.fromarray(array).convert("RGB") #convert the array to an image and save it
-            save_location = f"../Figures/char_segment_{b}_{n}.png"
-            character_image.save(save_location, "PNG")
-            print(f"Saved image to {save_location}")
-            prev_line_array = edit_line_array
-        b=b+1
-    
-
-def main():
-    # This is test code and should be removed later
-    # After it works
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
-    parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
-    parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
-    parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
-    parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
-    parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
-    parser.add_argument("-p", "--persistence_threshold", type=int, default=2, help="The persistence threshold for finding local extrema.")
-    args = parser.parse_args()
-    if not args.visualize:
-        print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
-
-    # Get an example test image (arbitrarily picked)
-    test_filenames = os.listdir(args.testdata)
-    for f in test_filenames:
-        # if "binarized" in f:
-        if "P106-Fg002-R-C01-R01-binarized" in f:
-            filename = f
-            break
-    binarized_image = Image.open(os.path.join(args.testdata, filename))
-    inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
-    best_rot, minima_rowindices = find_best_rotation(inverted_image, args)
-    image = rotate_invert_image(inverted_image, best_rot)
-
-    # At this point, we have the best rotation for the input test image
-    # And we also have the minima rowindices for rotated test image.
-    print(minima_rowindices)
-
-    # We can draw lines at the mimima rowindices in the rotated image
-    if args.visualize:
-        vis.draw_straight_lines(image, minima_rowindices)
-
-    image_array = np.array(image)
-    line_segments = perform_astar_pathfinding(image_array, minima_rowindices, args.CONST_C, args.subsampling)
-    line_segments = supersample_paths(line_segments)
-    # We now have the A* paths in the horizontal direction,
-    # which is our line segmentation
-    if args.visualize:
-        inverted_original_image = ImageOps.invert(binarized_image)
-        rotated_original_image = inverted_original_image.rotate(best_rot)
-        inverted_inverted_image = ImageOps.invert(rotated_original_image)
-        vis.draw_astar_lines(inverted_inverted_image, line_segments)
-
-
-    inverted_image = prepare_inverted_image(binarized_image, 1)
-    image = rotate_invert_image(inverted_image, best_rot)
-    image_array = np.array(image)
-    image_from_array = Image.fromarray(image_array)
-    # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
-    # If we do not insert these dummy paths, we lose the first and last line segments
-    num_cols = len(line_segments[0])
-    dummy_top_path = [(i, 0) for i in range(num_cols)]
-    dummy_bot_path = [(i, image_array.shape[0] - 1) for i in range(num_cols)]
-    line_segments.insert(0, dummy_top_path)
-    line_segments.append(dummy_bot_path)
-
-
+def extract_line_images(image_array, line_segments, num_cols, args):
     segment_arrays = []
     for index, segment_bottom_path in enumerate(line_segments[1:]):
         segment_top_path = line_segments[index]
@@ -519,17 +365,195 @@ def main():
         segment_arrays.append(segment_array)
 
         if args.visualize:
-            segment_image = Image.fromarray(segment_array).convert("RGB")
-            # segment_image.resize((segment_image.width//4, segment_image.height//4)).show()
-            #segment_image = segment_image.rotate(90)
-            save_location = f"../Figures/line_segment_{index}.png"
+            segment_image = Image.fromarray(segment_array).convert("L")
+            save_location = f"../Figures/line_segments/line_segment_{index}.png"
             segment_image.save(save_location, "PNG")
             print(f"Saved image to {save_location}")
 
+    return segment_arrays
+
+def segment_characters(line_segment_arrays, args):
+    zone_segments_list = []
+
+    for index, segment_array in enumerate(line_segment_arrays):
+        # Steps to perform character zone segmentation:
+        # Rotate 90 degrees
+        rotated_segment_array = np.rot90(segment_array)
+
+        # Perform histogram computation
+        segment_histogram = create_histogram(rotated_segment_array, smooth=51)
+
+        # Find local minima
+        segment_local_minima = extract_local_minima(segment_histogram, persistence_threshold=10)
+
+        # Perform A*
+        zone_segments = perform_astar_pathfinding(rotated_segment_array, segment_local_minima, args.CONST_C_CHAR, args.subsampling_char)
+        zone_segments_list.append(zone_segments)
+
+        if args.visualize:
+            vis.plot_histogram(segment_histogram, f"../Figures/char_histograms/character_histogram_{index}.png")
+            segment_array_image = Image.fromarray(rotated_segment_array).convert("L")
+            vis.draw_astar_lines(segment_array_image, zone_segments, width=3,
+                                 save_location=f"../Figures/char_segments/char_segment_with_zones_{index}.png")
+
+    return zone_segments_list
+
+def extract_char_images(character_zone_segments, segment_arrays, args):
+    char_arrays = []
+    b=0
+    for image in character_zone_segments: #go over every individual image
+        for n in range(len(image)+1): #go over every line in the image plus one to get 4 areas for 3 lines that are saved
+            max_x = 0
+            min_y = 0
+            line_array = []
+            edit_line_array = []
+            if n == (len(image)): # case when the area is form the top of the image to the previous red line
+                min_y = len(segment_arrays[b][1]) # these values are used to initialize a 2d array with the sizes of the furthest outsticking line parts
+                max_x = len(segment_arrays[b])
+                max_y = save_max_y
+            else:
+                prev = np.inf
+                # this for loop finds the dimensions of the array which copies the character
+                for x in range(len(image[n])): 
+                    if image[n][x][1] > min_y:
+                        min_y = image[n][x][1]
+                    if image[n][x][0] > max_x:
+                        max_x = image[n][x][0]
+                    if x > 0:
+                        if image[n][x][0] != prev:
+                            line_array.append(image[n][x])   #line_array saves all the line values that do not lie vertically above each other
+                    else:
+                       line_array.append(image[n][x])
+                    prev = image[n][x][0]
+                if n > 0: # if the area under any other than the first red line is to be saved
+                    max_y = np.inf
+                    for z in range(len(image[n-1])):
+                        if image[n-1][z][1] < max_y:
+                             max_y = image[n-1][z][1]
+            if n > 0:
+                save_max_y = max_y #save the highest laying value of this line
+            if n == 0: #if it is the first red line
+                array = [[255 for col in range(max_x+1)] for row in range(min_y)] #fill the array of the correct size with white pixel values
+            elif n == len(image): #if it is the last red line
+                array = [[255 for col in range(max_x+1)] for row in range(len(segment_arrays[b][0])-max_y)]
+            else: #if it is any of the inbetween red lines
+                array = [[255 for col in range(max_x+1)] for row in range(min_y-max_y)]
+
+            for h in range(len(line_array)): #flip the y values since the image is turned on its side in segment_arrays
+                dis = len(segment_arrays[b][0])-line_array[h][1]
+                edit_line_array.append((line_array[h][0],dis))
+
+            min_y = len(segment_arrays[b][0]) - min_y #flip this value as well because of the turning of the image
+
+
+            copied_black_pixel = False
+            # go over every segment and save the pixel values in array
+
+            for i in range(len(edit_line_array)): 
+                if n == 0: #if it is the first red line
+                    for j in range(edit_line_array[i][1],len(segment_arrays[b][0])): # goes over the y-values to and from the red lines
+                        if segment_arrays[b][i][j] < 128:
+                            array[j-min_y][i] = 1
+                            copied_black_pixel = True
+                elif n == len(image): #if it is the last red line
+                    for j in range(prev_line_array[i][1]):
+                        if segment_arrays[b][i][j] < 128:
+                            array[j][i] = 1
+                            copied_black_pixel = True
+                else: #if it is any of the inbetween red lines
+                    for j in range(edit_line_array[i][1],prev_line_array[i][1]):
+                        if segment_arrays[b][i][j] < 128:
+                            array[j-min_y][i] = 1
+                            copied_black_pixel = True
+
+            prev_line_array = edit_line_array
+            if not copied_black_pixel:
+                # If we did not encounter a black pixel, continue with the next segment
+                continue
+
+            array = np.asarray(array, dtype=np.uint8)
+
+            # Rotate 90 degrees and flip the array for reconstruction of original orientation
+            # MIGHTDO: Find out why the images are flipped and fix that, then remove the np.flipud here
+            array = np.rot90(array)
+            array = np.flipud(array)
+            char_arrays.append(array)
+
+            character_image = Image.fromarray(array).convert("L") #convert the array to an image and save it
+
+            if args.visualize:
+                save_location = f"../Figures/char_segments/char_segment_{b}_{n}.png"
+                character_image.save(save_location, "PNG")
+                print(f"Saved image to {save_location}")
+        b += 1
+
+    return char_arrays
+    
+# MIGHTDO: Rename main to something else, and call it from main.py
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
+    parser.add_argument("-t", "--testdata", default="../Test_Data", help="Location of test data (can be relative or absolute path)")
+    parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
+    parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
+    parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
+    parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
+    parser.add_argument("-p", "--persistence_threshold", type=int, default=2, help="The persistence threshold for finding local extrema.")
+    args = parser.parse_args()
+    if not args.visualize:
+        print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
+
+    fig_dirs = ["Figures/char_segments", "Figures/line_segments", "Figures/char_histograms", "Figures/line_histograms"]
+    util.makedirs(fig_dirs)
+
+    # Get an example test image (arbitrarily picked)
+    test_filenames = os.listdir(args.testdata)
+    for f in test_filenames:
+        # if "binarized" in f:
+        if "P106-Fg002-R-C01-R01-binarized" in f:
+            filename = f
+            break
+    binarized_image = Image.open(os.path.join(args.testdata, filename))
+    inverted_image = prepare_inverted_image(binarized_image, args.subsampling)
+    best_rot, minima_rowindices = find_best_rotation(inverted_image, args)
+    image = rotate_invert_image(inverted_image, best_rot)
+
+    # At this point, we have the best rotation for the input test image
+    # And we also have the minima rowindices for rotated test image.
+
+    # We can draw lines at the mimima rowindices in the rotated image
+    if args.visualize:
+        vis.draw_straight_lines(image, minima_rowindices)
+
+    image_array = np.array(image)
+    line_segments = perform_astar_pathfinding(image_array, minima_rowindices, args.CONST_C, args.subsampling)
+    line_segments = supersample_paths(line_segments)
+    # We now have the A* paths in the horizontal direction,
+    # which is our line segmentation
+    if args.visualize:
+        inverted_original_image = ImageOps.invert(binarized_image)
+        rotated_original_image = inverted_original_image.rotate(best_rot)
+        inverted_inverted_image = ImageOps.invert(rotated_original_image)
+        vis.draw_astar_lines(inverted_inverted_image, line_segments)
+
+
+    inverted_image = prepare_inverted_image(binarized_image, 1)
+    image = rotate_invert_image(inverted_image, best_rot)
+    image_array = np.array(image)
+    image_from_array = Image.fromarray(image_array)
+    # image_from_array.resize((image_from_array.width//4, image_from_array.height//4)).show()
+    # If we do not insert these dummy paths, we lose the first and last line segments
+    num_cols = len(line_segments[0])
+    dummy_top_path = [(i, 0) for i in range(num_cols)]
+    dummy_bot_path = [(i, image_array.shape[0] - 1) for i in range(num_cols)]
+    line_segments.insert(0, dummy_top_path)
+    line_segments.append(dummy_bot_path)
+
+    segment_arrays = extract_line_images(image_array, line_segments, num_cols, args)
+
     # Character segmentation starts here
     character_zone_segments = segment_characters(segment_arrays, args)
-    save_char_segments(character_zone_segments, segment_arrays)
-
+    segmented_characters = extract_char_images(character_zone_segments, segment_arrays, args)
 
 
 if __name__ == "__main__":
