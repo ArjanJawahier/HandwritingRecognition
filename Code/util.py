@@ -7,6 +7,6 @@ def makedirs(dirs):
         dirs = [dirs]
 
     for directory in dirs:
-        if not os.path.exists("../"+directory):
-            print(f"Making directory ../{directory}")
-            os.mkdir("../"+directory)
+        if not os.path.exists(directory):
+            print(f"Making directory {directory}")
+            os.makedirs(directory)
