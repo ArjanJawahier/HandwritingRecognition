@@ -414,11 +414,9 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
                 max_x = len(line_segments[b])
                 try:
                     max_y = save_max_y
-                except UnboundLocalError:
-                    max_y = np.inf
-                    for z in range(len(image[n-1])):
-                        if image[n-1][z][1] < max_y:
-                             max_y = image[n-1][z][1]
+                except UnboundLocalError as err:
+                    print(f"Skipping in extract_char_images due to error: {err}")
+                    continue
             else:
                 prev = np.inf
                 # this for loop finds the dimensions of the array which copies the character
@@ -454,29 +452,29 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
             min_y = len(line_segments[b][0]) - min_y #flip this value as well because of the turning of the image
 
 
-            copied_black_pixel = False
+            n_black_pix = 0
             # go over every segment and save the pixel values in array
 
             for i in range(len(edit_line_array)): 
                 if n == 0: #if it is the first red line
                     for j in range(edit_line_array[i][1],len(line_segments[b][0])): # goes over the y-values to and from the red lines
                         if line_segments[b][i][j] < 128:
-                            array[j-min_y][i] = 1
-                            copied_black_pixel = True
+                            array[j-min_y][i] = 0
+                            n_black_pix += 1
                 elif n == len(image): #if it is the last red line
                     for j in range(prev_line_array[i][1]):
                         if line_segments[b][i][j] < 128:
-                            array[j][i] = 1
-                            copied_black_pixel = True
+                            array[j][i] = 0
+                            n_black_pix += 1
                 else: #if it is any of the inbetween red lines
                     for j in range(edit_line_array[i][1],prev_line_array[i][1]):
                         if line_segments[b][i][j] < 128:
-                            array[j-min_y][i] = 1
-                            copied_black_pixel = True
+                            array[j-min_y][i] = 0
+                            n_black_pix += 1
 
             prev_line_array = edit_line_array
-            if not copied_black_pixel:
-                # If we did not encounter a black pixel, continue with the next segment
+            if n_black_pix < args.n_black_pix_threshold:
+                # If we did not encounter n_black_pix_theshold black pixels, continue with the next segment
                 continue
 
             array = np.asarray(array, dtype=np.uint8)

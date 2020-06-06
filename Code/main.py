@@ -1,6 +1,6 @@
 """main.py
 This will be the file that serves as a starting point.
-usage: python main.py [-h] -f FILE
+usage: python main.py [-h]
 """
 
 import os
@@ -12,11 +12,12 @@ import torchvision.utils as vutils
 from sklearn.model_selection import train_test_split
 from skimage.transform import resize
 import numpy as np
-import PIL
+import PIL.Image as Image
 import util
 import characterclassifier as cc
 import segmentation
 import preprocess
+import json
 
 def parse_args():
     """Parses command line arguments and defines defaults for
@@ -25,17 +26,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Character classifier for the Dead Sea Scrolls")
     # Base options
     parser.add_argument("--train_dataroot", required=True, type=str, help="root-directory containing the training set images. It is required to know what the target labels are.")
-    parser.add_argument("--test_dataroot", type=str, help="root-directory containing the testing set images (unsegmented)")
+    test_img_data_group = parser.add_mutually_exclusive_group()
+    test_img_data_group.add_argument("--test_image", type=str, help="filename of an image you want to predict")
+    test_img_data_group.add_argument("--test_dataroot", type=str, help="root-directory containing the testing set images (unsegmented)")
     train_test_group = parser.add_mutually_exclusive_group(required=True)
     train_test_group.add_argument("-tr", "--train", action="store_true", help="whether to train a classifier")
     train_test_group.add_argument("-te", "--test", action= "store_true", help="whether to test a classifier")
     train_test_group.add_argument("-pr", "--predict", action="store_true", help="whether to use a classifier to predict the label of a character image")
     parser.add_argument("--n_channels", type=int, default=1, help="number of color channels in the input data")
-    parser.add_argument("--image_size", type=int, default=32, metavar="SIZE", help="both width and height of input images will be scaled to be SIZE pixels large")
+    parser.add_argument("--image_size", type=int, default=64, metavar="SIZE", help="both width and height of input images will be scaled to be SIZE pixels large")
     parser.add_argument("--n_gpu", type=int, default=1, help="number of gpus that can be used")
 
     # Network options
-    parser.add_argument("--dropout", action="store_true", help="whether to use dropout")
     parser.add_argument("--nf", type=int, default=16, help="number of feature maps in conv layers")
     parser.add_argument("--use_bias", action="store_true", default=True, help="whether to use biases in the neural network")
     parser.add_argument("--n_workers", type=int, default=2, help="number of workers for the dataloader")
@@ -43,8 +45,7 @@ def parse_args():
     parser.add_argument("--n_resnet_blocks", type=int, default=6, help="number of resnet blocks in the neural network")
 
     # Train options
-    parser.add_argument("-ne", "--n_epochs", type=int, default=10, help="number of training epochs")
-    parser.add_argument("-pa", "--patience", type=int, default=0, help="patience for early stopping")
+    parser.add_argument("-ne", "--n_epochs", type=int, default=15, help="number of training epochs")
     parser.add_argument("-b1", "--beta1", type=float, default=0.9, help="beta1 parameter for the Adam optimizer")
     parser.add_argument("-b2", "--beta2", type=float, default=0.999, help="beta2 parameter for the Adam optimizer")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.001, help="(initial) learning rate used in the optimizer")
@@ -60,6 +61,8 @@ def parse_args():
     parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
     parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
     parser.add_argument("-p", "--persistence_threshold", type=int, default=2, help="The persistence threshold for finding local extrema.")
+    parser.add_argument("--n_black_pix_threshold", type=int, default=200, help="The minimum number of black pixels per character image.")
+    parser.add_argument("--prediction_file", default="../predictions.json", help="The location where the predictions should be saved to.")
     return parser.parse_args()
 
 
@@ -75,11 +78,11 @@ def create_dataloaders(args):
     np.random.seed(1337)
     dataset = dset.ImageFolder(root=args.train_dataroot,
                                transform=transforms.Compose([
-                                   transforms.Resize(args.image_size),
-                                   transforms.CenterCrop(args.image_size),
+                                   transforms.Resize((args.image_size, args.image_size)),
                                    transforms.Grayscale(num_output_channels=1),
                                    transforms.ToTensor(),
-                               ]))
+                               ])
+                               )
 
     train_idx, test_idx = train_test_split(
                               np.arange(len(dataset.targets)),
@@ -120,6 +123,9 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
 
         # Get the data in batches
         for data, targets in train_data:
+            # We perform our custom preprocessing
+            data = data.numpy()
+            data = preprocess.arrs_to_tensor(data, args.image_size)
             data = data.to(device)
             targets = targets.to(device)
             optimizer.zero_grad()
@@ -144,6 +150,10 @@ def test(args, network, test_data, nll_loss, device, prefix="Test"):
     n_correct = 0
     n_preds = 0
     for data, targets in test_data:
+        # We perform our custom preprocessing
+        data = data.numpy()
+        # data = Image.fromarray(data)
+        data = preprocess.arrs_to_tensor(data, args.image_size)
         data = data.to(device)
         targets = targets.to(device)
         predictions = network(data)
@@ -163,8 +173,9 @@ def predict(args, network, data, device, labels):
     returned_characters = []
     for char_img in data:
         char_img = resize(char_img, (args.image_size, args.image_size))
-        char_img = torch.Tensor(char_img)
         char_img = char_img.reshape(1, 1, char_img.shape[0], char_img.shape[1])
+        char_img /= 255
+        char_img = torch.Tensor(char_img)
         char_img = char_img.to(device)
         pred = network(char_img)
         pred = int(torch.argmax(pred).cpu())
@@ -172,6 +183,7 @@ def predict(args, network, data, device, labels):
             if value == pred:
                 # TODO: Check if this results in the correct order, might need to insert(0) instead
                 returned_characters.append(key)
+                break
     return returned_characters
 
 def argument_error(message):
@@ -184,6 +196,7 @@ def main():
     util.makedirs(args.save_dir)
 
     train_dataloader, valid_dataloader, test_dataloader = create_dataloaders(args)
+
 
     if args.train:
         clf = cc.CharacterClassifier(args).to(device)
@@ -201,29 +214,43 @@ def main():
         test(args, clf, test_dataloader, nll_loss, device)
 
     elif args.predict:
-        if not args.test_dataroot:
-            argument_error("No test_dataroot specified in command line arguments, which is required if you want to predict")
+        if not args.test_dataroot and not args.test_image:
+            argument_error("No test_dataroot or test_image specified in command line arguments, which is required if you want to predict")
         elif not args.network_path:
             argument_error("No network_path specified in command line arguments, which is required if you want to predict.")
 
-        print("The test dataroot is expected to only contain binarized images."
-              "Please check if this is the case")
-
         class_labels = dset.ImageFolder(root=args.train_dataroot).class_to_idx
 
-        test_filenames = os.listdir(args.test_dataroot)
-        for filename in test_filenames:
-            if not ".jpg" in filename and not ".jpeg" in filename:
-                argument_error(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+        if args.test_dataroot:
+            print("The test dataroot is expected to only contain binarized images."
+                  "Please check if this is the case")
 
-            char_segments = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments, filename, args.visualize)
+            preds = dict()
+            test_filenames = os.listdir(args.test_dataroot)
+            for f_idx, filename in enumerate(test_filenames):
+                if not ".jpg" in filename and not ".jpeg" in filename:
+                    argument_error(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+
+                char_segments = segmentation.segment_from_args(args, filename)
+                char_segments = preprocess.preprocess_arrays(char_segments, filename, args.visualize)
+                clf = torch.load(args.network_path)
+                clf.eval()
+                pred = predict(args, clf, char_segments, device, class_labels)
+                pred = " ".join(pred)
+                preds[filename] = pred
+                print(pred)
+
+            # Output the predictions to a file specified in the args
+            with open(args.prediction_file, "w") as outfile:
+                json.dump(preds, outfile, sort_keys=True, indent=4)
+
+        elif args.test_image:
+            img = Image.open(args.test_image)
+            img = np.array(img)
             clf = torch.load(args.network_path)
             clf.eval()
-            pred = predict(args, clf, char_segments, device, class_labels)
+            pred = predict(args, clf, [img], device, class_labels)
             print(pred)
-            print(len(pred))
-            exit()
 
 if __name__ == "__main__":
     main()

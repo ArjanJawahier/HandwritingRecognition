@@ -3,12 +3,14 @@ The code in this file calculates the center of mass of an input image
 and crops the image with the center of mass as the new center of the output image.
 """
 
+from skimage.transform import resize
 from scipy import ndimage
 import PIL.Image as Image
 import PIL.ImageOps as ImageOps
 import numpy as np
 import os
 import util
+import torch
 
 def center_of_mass(image):
     """Computes center of mass.
@@ -43,7 +45,7 @@ def crop_image(arr, cent_of_mass, crop_dims):
             cropped[new_r, new_c] = arr[r, c]
     return cropped
 
-def preprocess_arrays(arrs, src_filename, visualize=False, crop_dimensions=(63, 63)):
+def preprocess_arrays(arrs, src_filename=None, visualize=False, crop_dimensions=(63, 63)):
     if visualize:
         util.makedirs("../Figures/cropped_chars")    
 
@@ -63,4 +65,25 @@ def preprocess_arrays(arrs, src_filename, visualize=False, crop_dimensions=(63, 
             image.save(f"../Figures/cropped_chars/{src_filename}/char_{index}.png")
     return return_arrs
 
+def image_to_tensor(img, crop_dimensions=(63, 63)):
+    # image = Image.fromarray(img).convert("L")
+    cent_mass = center_of_mass(image)
+    image_arr = np.array(image)
+    image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
+    return torch.Tensor(image_arr)
 
+
+def arrs_to_tensor(arrs, image_size, crop_dimensions=(63, 63)):
+    # This expects numpy arrays
+    return_arr = []
+    for img in arrs:
+        img = img.reshape(img.shape[-2], img.shape[-1]) * 255
+        img = Image.fromarray(img).convert("L")
+        cent_mass = center_of_mass(img)
+        img = np.array(img, dtype=np.uint8)
+        img = crop_image(img, cent_mass, crop_dimensions) / 255
+        img = resize(img, (image_size, image_size))
+        img = img.reshape(1, img.shape[0], img.shape[1]) 
+        return_arr.append(img)
+    return_arr = np.array(return_arr)
+    return torch.Tensor(return_arr)
