@@ -97,10 +97,6 @@ def create_dataloaders(args):
                               train_idx,
                               test_size=0.15
                           )
-    print(train_idx)
-    print(test_idx)
-    print(valid_idx)
-    exit()
 
     train_sampler = torch.utils.data.SubsetRandomSampler(train_idx)
     valid_sampler = torch.utils.data.SubsetRandomSampler(valid_idx)
