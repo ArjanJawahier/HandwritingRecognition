@@ -7,7 +7,14 @@ We are using quite a number of dependencies, use the following command to instal
 pip3 install numpy scikit-learn scikit-image torch torchvision Pillow
 ```
 
-## How to use:
+## Data Augmentation
+Because not all the characters have equal amounts of data, we used imagemorph  to augment the data. To compile and build imagemorph, change directories to the `Code`directory and run use the following command: `make`  
+Then, to run the imagemorph program, use the following command:
+```bash
+./run_imagemorph.sh
+```
+
+## How to use train and test our network:
 Run `python3 main.py -h` to see all possible (and required) arguments. Please keep in mind that you should only have binarized images in your test/predict data folder. All of these images should also be JPGs.  
 
 ## Example uses
@@ -29,3 +36,4 @@ It is still necessary to specify a train_dataroot while predicting, because we c
 3) `preprocess.py` handles the cropping of the segmented characters. The characters are also centered in the resulting images.
 4) `visualizer.py` handles intermediate results visualization (such as the images we use in the presentations).
 5) `characterclassifier.py` contains the code for our neural network. We are using a ResNet architecture.
+6) `imagemorph.c` and `Makefile` handle the data augmentation, imagemorph.c has been edited slightly to allow for PGM inputs instead of PPM.
