@@ -8,7 +8,7 @@ pip3 install numpy scikit-learn scikit-image torch torchvision Pillow
 ```
 
 ## Data Augmentation
-Because not all the characters have equal amounts of data, we used imagemorph  to augment the data. To compile and build imagemorph, change directories to the `Code`directory and run use the following command: `make`  
+Because not all the characters have equal amounts of data, we used imagemorph  to augment the data. To compile and build imagemorph, change directories to the `Code`directory and run use the following command: `make`  (in Windows use something like MinGW)
 Then, to run the imagemorph program, use the following command:
 ```bash
 ./run_imagemorph.sh
