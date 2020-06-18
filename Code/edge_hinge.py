@@ -12,7 +12,7 @@ import util
 import torch
 
 def edge_hinge(img):
-    frag_length = 4
+    frag_length = 5
     width, height = img.size
     eh = np.zeros(((frag_length - 1) * 8, (frag_length - 1) * 8))
     pic = np.array(img)
@@ -94,5 +94,5 @@ if __name__ == "__main__":
     imgs_combv = np.vstack((imgs_combh, imgs_combh2))
 
     imgs_comb = Image.fromarray( imgs_combv).convert('RGB')
-    imgs_comb.save("Herodian.png")
+    imgs_comb.show()
 
