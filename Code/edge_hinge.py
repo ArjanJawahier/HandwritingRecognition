@@ -57,7 +57,7 @@ def edge_hinge(img):
                     if pic[y+frag_length,x+z] == 1:
                         eh[init, count] += 1
                 count += 1
-            for z in range(-(frag_length - 1), 0-1):
+            for z in range(-(frag_length - 1), -1):
                 if not found:
                     if pic[y-z,x+frag_length] == 1:
                         found = True
