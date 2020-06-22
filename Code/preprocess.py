@@ -23,7 +23,7 @@ def center_of_mass(image):
     cent_mass = ndimage.measurements.center_of_mass(inverted_arr)
     return cent_mass
 
-def crop_image(arr, cent_of_mass, crop_dims):
+def crop_image(arr, cent_of_mass, crop_dims, args):
     cent_r, cent_c = cent_of_mass
     cent_r, cent_c = int(cent_r), int(cent_c)
     
@@ -44,9 +44,10 @@ def crop_image(arr, cent_of_mass, crop_dims):
                 continue
 
             cropped[new_r, new_c] = arr[r, c]
+
     return cropped
 
-def preprocess_arrays(arrs, src_filename=None, visualize=False, crop_dimensions=(63, 63)):
+def preprocess_arrays(arrs, src_filename=None, args, crop_dimensions=(63, 63)):
     if visualize:
         util.makedirs("Figures/cropped_chars")    
 
@@ -57,14 +58,17 @@ def preprocess_arrays(arrs, src_filename=None, visualize=False, crop_dimensions=
             cent_mass = center_of_mass(image)
 
             image_arr = np.array(image)
-            image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
-            return_arrs[l_idx].append(image_arr)
+            image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
 
-            if visualize:
+            if np.sum(np.absolute(image_arr/255 - 1)) > args.n_black_pix_threshold:
+                return_arrs[l_idx].append(image_arr)
+
+            if args.visualize:
                 image = Image.fromarray(image_arr).convert("L")
                 util.makedirs(f"Figures/cropped_chars/{src_filename}")
                 # TODO: Change index to correct row and index in that row
                 image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
+
 
     return return_arrs
 

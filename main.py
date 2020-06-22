@@ -149,7 +149,6 @@ def test(args, network, test_data, nll_loss, device, prefix="Test"):
     for data, targets in test_data:
         # We perform our custom preprocessing
         data = data.numpy()
-        # data = Image.fromarray(data)
         data = preprocess.arrs_to_tensor(data, args.image_size)
         data = data.to(device)
         targets = targets.to(device)
@@ -178,7 +177,6 @@ def predict(args, network, data, device, labels):
         pred = int(torch.argmax(pred).cpu())
         for key, value in labels.items():
             if value == pred:
-                # TODO: Check if this results in the correct order, might need to insert(0) instead
                 returned_characters.append(key)
                 break
     return returned_characters
@@ -227,6 +225,16 @@ def main():
             'Waw': 24, 'Yod': 25, 'Zayin': 26
         }
 
+        # These are the unicodes for the Hebrew characters
+        unicode_labels = {
+            '\u05D0': 0, '\u05E2': 1, '\u05D1': 2, '\u05D3': 3, '\u05D2': 4,
+            '\u05D4': 5, '\u05D7': 6, '\u05DB': 7, '\u05DA': 8, '\u05DC': 9,
+            '\u05DD': 10, '\u05DE': 11, '\u05DF': 12, '\u05E0': 13, '\u05E4': 14,
+            '\u05E3': 15, '\u05E7': 16, '\u05E8': 17, '\u05E1': 18, '\u05E9': 19,
+            '\u05EA': 20, '\u05D8': 21, '\u05E5': 22, '\u05E6': 23, '\u05D5': 24,
+            '\u05D9': 25, '\u05D6': 26
+        }
+
         print("The test dataroot is expected to only contain binarized "
               "images. Please check if this is the case")
 
@@ -242,17 +250,18 @@ def main():
                 argument_error(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
 
             char_segments = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments, filename, args.visualize)
+            char_segments = preprocess.preprocess_arrays(char_segments, filename, args)
             pred_lines = []
             for line in char_segments:
-                pred = predict(args, clf, line, device, class_labels)
+                # Do we use Class or Unicode labels?
+                pred = predict(args, clf, line, device, unicode_labels)
                 if len(pred) > 0:
                     pred = " ".join(pred) + "\n"
                     pred_lines.append(pred)
 
             with open(f"results/{name}_characters.txt", "w") as outfile:
                 outfile.writelines(pred_lines)
-
+                print(f"Written output to results/{name}_characters.txt")
 
 if __name__ == "__main__":
     main()

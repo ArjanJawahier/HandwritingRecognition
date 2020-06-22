@@ -44,6 +44,12 @@ def find_best_rotation(image, filename, args):
     return best_rot, best_minima_indices
 
 def rotate_invert_image(image, rotation):
+    """Rotates and inverts a given image, according to a given rotation.
+    The rotation should be given in degrees.
+
+    returns:
+    inverted_rotated_image -- The inverted and rotated image.
+    """
     rotated_image = image.rotate(rotation)
     inverted_rotated_image = ImageOps.invert(rotated_image)
     return inverted_rotated_image
@@ -102,8 +108,8 @@ def create_histogram(image_array, smooth=15):
     return smooth_hist
 
 def extract_local_minima(histogram, persistence_threshold=10):
-    """Extracts local minima from the histogram based on the persistence1d method.
-    This was also done in the A* paper.
+    """Extracts local minima from the histogram based on the persistence1d 
+    method. This was also done in the A* paper.
     """
 
     # Use persistence to find out local minima
@@ -155,7 +161,6 @@ def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampli
     return_dict = manager.dict()
     jobs = []
 
-    print(f"Computing A*-paths for rows: {minima_rowindices[1:-1]}")
     for index, row in enumerate(minima_rowindices[1:-1]):
         border_top = minima_rowindices[index]
         border_bot = minima_rowindices[index+2]
@@ -223,8 +228,6 @@ def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsa
                 if (neighbour not in top_options) or (top_options[neighbour.__hash__] > neighbour.f):
                     heappush(priority_queue , neighbour) 
                     top_options[neighbour.__hash__] = neighbour.f
-                else:
-                    print("Skip")
                 
 
 def get_neighbours(img_arr, current_node, line_num, border_top, border_bot):
@@ -333,12 +336,10 @@ def supersample_path(path):
 
     return path
 
-def extract_line_images(img_arr, astar_paths, n_cols, filename, args):
+def extract_line_images(img_arr, astar_paths, n_cols, filename, visualize):
     segment_arrs = []
     for index, segment_bottom_path in enumerate(astar_paths[1:]):
         segment_top_path = astar_paths[index]
-        # segment_top_path = supersample_path(segment_top_path)
-        # segment_bottom_path = supersample_path(segment_bottom_path)
 
         top = img_arr.shape[1]
         bot = 0     
@@ -366,7 +367,7 @@ def extract_line_images(img_arr, astar_paths, n_cols, filename, args):
 
         segment_arrs.append(seg_arr)
 
-        if args.visualize:
+        if visualize:
             segment_image = Image.fromarray(seg_arr).convert("L")
             util.makedirs(f"Figures/line_segments/{filename}")
             save_location = f"Figures/line_segments/{filename}/line_segment_{index}.png"
@@ -376,41 +377,102 @@ def extract_line_images(img_arr, astar_paths, n_cols, filename, args):
     return segment_arrs
 
 def segment_characters(line_segments, filename, args):
-    astar_paths = []
+    image_astar_paths = []
 
     for index, seg_arr in enumerate(line_segments):
-        # Steps to perform character zone segmentation:
-        # Rotate 90 degrees
         seg_arr = np.rot90(seg_arr)
-
-        # Perform histogram computation
         seg_hist = create_histogram(seg_arr, smooth=51)
-
-        # Find local minima
         seg_minima = extract_local_minima(seg_hist, persistence_threshold=10)
 
-        # Perform A*
-        astar_path = perform_astar_pathfinding(seg_arr, seg_minima, args.CONST_C_CHAR, args.subsampling_char)
-        astar_paths.append(astar_path)
+        line_astar_paths = perform_astar_pathfinding(
+            seg_arr, seg_minima, 
+            args.CONST_C_CHAR, args.subsampling_char
+        )
+        line_astar_paths = supersample_paths(line_astar_paths)
 
+        # If we do not insert these dummy paths, we lose the first and last line segments
+        dummy_top_path = [(i, 0) for i in range(seg_arr.shape[1])]
+        dummy_bot_path = [(i, seg_arr.shape[0] - 1) for i in range(seg_arr.shape[1])]
+        line_astar_paths.insert(0, dummy_top_path)
+        line_astar_paths.append(dummy_bot_path)
+        image_astar_paths.append(line_astar_paths)
         if args.visualize:
-            util.makedirs([f"Figures/char_histograms/{filename}", f"Figures/astar_paths/{filename}"])
-            vis.plot_histogram(seg_hist, f"Figures/char_histograms/{filename}/character_histogram_{index}.png")
+            util.makedirs([
+                f"Figures/char_histograms/{filename}",
+                f"Figures/astar_paths/{filename}"
+            ])
+            vis.plot_histogram(
+                seg_hist,
+                f"Figures/char_histograms/{filename}/character_histogram_{index}.png"
+            )
             image = Image.fromarray(seg_arr).convert("L")
-            vis.draw_astar_lines(image, astar_path, width=3,
-                                 save_location=f"Figures/astar_paths/{filename}/char_segment_with_zones_{index}.png")
-
-    return astar_paths
+            vis.draw_astar_lines(
+                image, line_astar_paths, width=3,
+                save_location=f"Figures/astar_paths/{filename}/char_segment_with_zones_{index}.png"
+            )
+    return image_astar_paths
 
 def extract_char_images(char_astar_paths, line_segments, filename, args):
-    char_segments = [[] for _ in char_astar_paths]
-    for b, image in enumerate(char_astar_paths): #go over every individual image
-        for n in range(len(image)+1): #go over every line in the image plus one to get 4 areas for 3 lines that are saved
+    """We can leverage the code from extracting lines. Extracting characters
+    can be done with the same process. First, we rotate the line segment.
+    Then, we extract the character segments like we did with the line segments.
+    Then we rotate back. Meanwhile, we test if the character has enough ink.
+
+    args:
+    char_astar_paths -- Each line has numerous astar_paths that denote
+        boundaries between character zones
+    line_segments -- The line segments with all the characters in it.
+        This is essentially a list of numpy arrays, where the numpy arrays
+        are the segmented line-images.
+    filename -- The filename of the test image we are currently processing.
+    args -- The command line arguments.
+
+    returns:
+    char_segments -- A list of lists where each nested list contains all
+        segmented characters of a line.
+    """
+    l_idx = 0
+    char_segments = []
+
+    for segment, line_astar_paths in zip(line_segments, char_astar_paths):
+        if len(line_astar_paths) == 0:
+            continue
+
+        n_cols = len(line_astar_paths[0])
+        segment = np.rot90(segment)
+        chars = extract_line_images(segment, line_astar_paths, n_cols, filename, visualize=False)
+
+        # Remove characters without enough ink, according to the threshold
+        chars_with_enough_ink = []
+        for i, ch in enumerate(reversed(chars)):
+            inverted_normalized = np.absolute(ch/255 - 1)
+            if np.sum(inverted_normalized) > args.n_black_pix_threshold:
+                ch = np.rot90(ch, 3)
+                chars_with_enough_ink.append(ch)
+
+        char_segments.append(chars_with_enough_ink)
+
+        if args.visualize:
+            for s_idx, char_segment in enumerate(chars_with_enough_ink):
+                char_image = Image.fromarray(char_segment).convert("L")
+                util.makedirs(f"Figures/char_segments/{filename}")
+                save_location = f"Figures/char_segments/{filename}/char_segment_{l_idx}_{s_idx}.png"
+                char_image.save(save_location, "PNG")
+                print(f"Saved image to {save_location}")
+        l_idx += 1
+    return char_segments
+
+# Deprecated, reason: "This function is a bit long and hard to decipher"
+def extract_char_images_old(char_astar_paths, line_segments, filename, args):
+    char_segments = [[] for _ in range(len(char_astar_paths))]
+    for b in range(len(char_astar_paths)): #go over every individual path
+        path = char_astar_paths[b]
+        for n in range(len(path)+1): #go over every line in the path plus one to get 4 areas for 3 lines that are saved
             max_x = 0
             min_y = 0
             line_array = []
             edit_line_array = []
-            if n == (len(image)): # case when the area is form the top of the image to the previous red line
+            if n == (len(path)): # case when the area is form the top of the path to the previous red line
                 min_y = len(line_segments[b][1]) # these values are used to initialize a 2d array with the sizes of the furthest outsticking line parts
                 max_x = len(line_segments[b])
                 try:
@@ -421,36 +483,36 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
             else:
                 prev = np.inf
                 # this for loop finds the dimensions of the array which copies the character
-                for x in range(len(image[n])): 
-                    if image[n][x][1] > min_y:
-                        min_y = image[n][x][1]
-                    if image[n][x][0] > max_x:
-                        max_x = image[n][x][0]
+                for x in range(len(path[n])): 
+                    if path[n][x][1] > min_y:
+                        min_y = path[n][x][1]
+                    if path[n][x][0] > max_x:
+                        max_x = path[n][x][0]
                     if x > 0:
-                        if image[n][x][0] != prev:
-                            line_array.append(image[n][x])   #line_array saves all the line values that do not lie vertically above each other
+                        if path[n][x][0] != prev:
+                            line_array.append(path[n][x])   #line_array saves all the line values that do not lie vertically above each other
                     else:
-                       line_array.append(image[n][x])
-                    prev = image[n][x][0]
+                       line_array.append(path[n][x])
+                    prev = path[n][x][0]
                 if n > 0: # if the area under any other than the first red line is to be saved
                     max_y = np.inf
-                    for z in range(len(image[n-1])):
-                        if image[n-1][z][1] < max_y:
-                             max_y = image[n-1][z][1]
+                    for z in range(len(path[n-1])):
+                        if path[n-1][z][1] < max_y:
+                             max_y = path[n-1][z][1]
             if n > 0:
                 save_max_y = max_y #save the highest laying value of this line
             if n == 0: #if it is the first red line
                 array = [[255 for col in range(max_x+1)] for row in range(min_y)] #fill the array of the correct size with white pixel values
-            elif n == len(image): #if it is the last red line
+            elif n == len(path): #if it is the last red line
                 array = [[255 for col in range(max_x+1)] for row in range(len(line_segments[b][0])-max_y)]
             else: #if it is any of the inbetween red lines
                 array = [[255 for col in range(max_x+1)] for row in range(min_y-max_y)]
 
-            for h in range(len(line_array)): #flip the y values since the image is turned on its side in line_segments
+            for h in range(len(line_array)): #flip the y values since the path is turned on its side in line_segments
                 dis = len(line_segments[b][0])-line_array[h][1]
                 edit_line_array.append((line_array[h][0],dis))
 
-            min_y = len(line_segments[b][0]) - min_y #flip this value as well because of the turning of the image
+            min_y = len(line_segments[b][0]) - min_y #flip this value as well because of the turning of the path
 
 
             n_black_pix = 0
@@ -462,7 +524,7 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
                         if line_segments[b][i][j] < 128:
                             array[j-min_y][i] = 0
                             n_black_pix += 1
-                elif n == len(image): #if it is the last red line
+                elif n == len(path): #if it is the last red line
                     for j in range(prev_line_array[i][1]):
                         if line_segments[b][i][j] < 128:
                             array[j][i] = 0
@@ -486,19 +548,19 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
             array = np.flipud(array)
             char_segments[b].insert(0, array)
 
-            if args.visualize:
-                char_image = Image.fromarray(array).convert("L") #convert the array to an image and save it
+        if args.visualize:
+            for s_idx, char_segment in enumerate(char_segments[b]):
+                char_image = Image.fromarray(char_segment).convert("L") #convert the array to an image and save it
                 util.makedirs(f"Figures/char_segments/{filename}")
-                save_location = f"Figures/char_segments/{filename}/char_segment_{b}_{n}.png"
+                save_location = f"Figures/char_segments/{filename}/char_segment_{b}_{s_idx}.png"
                 char_image.save(save_location, "PNG")
                 print(f"Saved image to {save_location}")
 
     return char_segments
     
 def segment_from_args(args, filename):
-    if not args.visualize:
-        print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
-    else:
+    print(f"Segmenting {filename}")
+    if args.visualize:
         fig_dirs = ["Figures/char_segments", "Figures/line_segments",
                     "Figures/char_histograms", "Figures/line_histograms"]
         util.makedirs(fig_dirs)
@@ -536,7 +598,7 @@ def segment_from_args(args, filename):
     astar_paths.insert(0, dummy_top_path)
     astar_paths.append(dummy_bot_path)
 
-    segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args)
+    segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args.visualize)
     char_astar_paths = segment_characters(segmented_lines, filename, args)
     segmented_characters = extract_char_images(char_astar_paths, segmented_lines, filename, args)
     return segmented_characters
