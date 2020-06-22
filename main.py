@@ -250,7 +250,7 @@ def main():
                 argument_error(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
 
             char_segments = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments, filename, args)
+            char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
             pred_lines = []
             for line in char_segments:
                 # Do we use Class or Unicode labels?

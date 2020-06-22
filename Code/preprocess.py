@@ -47,8 +47,8 @@ def crop_image(arr, cent_of_mass, crop_dims, args):
 
     return cropped
 
-def preprocess_arrays(arrs, src_filename=None, args, crop_dimensions=(63, 63)):
-    if visualize:
+def preprocess_arrays(arrs, args, src_filename=None, crop_dimensions=(63, 63)):
+    if args.visualize:
         util.makedirs("Figures/cropped_chars")    
 
     return_arrs = [[] for _ in arrs]
@@ -66,7 +66,6 @@ def preprocess_arrays(arrs, src_filename=None, args, crop_dimensions=(63, 63)):
             if args.visualize:
                 image = Image.fromarray(image_arr).convert("L")
                 util.makedirs(f"Figures/cropped_chars/{src_filename}")
-                # TODO: Change index to correct row and index in that row
                 image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
 
 
