@@ -256,7 +256,7 @@ def main():
                 # Do we use Class or Unicode labels?
                 pred = predict(args, clf, line, device, unicode_labels)
                 if len(pred) > 0:
-                    pred = " ".join(pred) + "\n"
+                    pred = " ".join(list(reversed(pred))) + "\n"
                     pred_lines.append(pred)
 
             with open(f"results/{name}_characters.txt", "w") as outfile:
