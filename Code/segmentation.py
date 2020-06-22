@@ -12,10 +12,12 @@ from heapq import heapify, heappop, heappush
 from scipy.signal import savgol_filter
 import multiprocessing
 from multiprocessing import Process, Queue
-from persistence.persistence1d import RunPersistence
-import visualizer as vis
-import util
 import time
+
+from Code.persistence.persistence1d import RunPersistence
+import Code.visualizer as vis
+import Code.util as util
+
 
 def prepare_inverted_image(binarized_image, subsampling):
     # Open the image and invert it
@@ -60,9 +62,9 @@ def line_segment(image, rotation, visualize, persistence_threshold, filename):
     histogram = create_histogram(image_array)
     sorted_minima = extract_local_minima(histogram, persistence_threshold=persistence_threshold)
     if visualize:
-        util.makedirs(f"../Figures/line_histograms/{filename}")
-        vis.plot_histogram(histogram, f"../Figures/line_histograms/{filename}/smoothed_histogram_{rotation}")
-        vis.plot_histogram(histogram, f"../Figures/line_histograms/{filename}/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
+        util.makedirs(f"Figures/line_histograms/{filename}")
+        vis.plot_histogram(histogram, f"Figures/line_histograms/{filename}/smoothed_histogram_{rotation}")
+        vis.plot_histogram(histogram, f"Figures/line_histograms/{filename}/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
 
 
     # Some orientation might have different numbers of minima
@@ -366,8 +368,8 @@ def extract_line_images(img_arr, astar_paths, n_cols, filename, args):
 
         if args.visualize:
             segment_image = Image.fromarray(seg_arr).convert("L")
-            util.makedirs(f"../Figures/line_segments/{filename}")
-            save_location = f"../Figures/line_segments/{filename}/line_segment_{index}.png"
+            util.makedirs(f"Figures/line_segments/{filename}")
+            save_location = f"Figures/line_segments/{filename}/line_segment_{index}.png"
             segment_image.save(save_location, "PNG")
             print(f"Saved image to {save_location}")
 
@@ -392,18 +394,17 @@ def segment_characters(line_segments, filename, args):
         astar_paths.append(astar_path)
 
         if args.visualize:
-            util.makedirs([f"../Figures/char_histograms/{filename}", f"../Figures/astar_paths/{filename}"])
-            vis.plot_histogram(seg_hist, f"../Figures/char_histograms/{filename}/character_histogram_{index}.png")
+            util.makedirs([f"Figures/char_histograms/{filename}", f"Figures/astar_paths/{filename}"])
+            vis.plot_histogram(seg_hist, f"Figures/char_histograms/{filename}/character_histogram_{index}.png")
             image = Image.fromarray(seg_arr).convert("L")
             vis.draw_astar_lines(image, astar_path, width=3,
-                                 save_location=f"../Figures/astar_paths/{filename}/char_segment_with_zones_{index}.png")
+                                 save_location=f"Figures/astar_paths/{filename}/char_segment_with_zones_{index}.png")
 
     return astar_paths
 
 def extract_char_images(char_astar_paths, line_segments, filename, args):
-    char_segments = []
-    b=0
-    for image in char_astar_paths: #go over every individual image
+    char_segments = [[] for _ in char_astar_paths]
+    for b, image in enumerate(char_astar_paths): #go over every individual image
         for n in range(len(image)+1): #go over every line in the image plus one to get 4 areas for 3 lines that are saved
             max_x = 0
             min_y = 0
@@ -483,16 +484,14 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
             # MIGHTDO: Find out why the images are flipped and fix that, then remove the np.flipud here
             array = np.rot90(array)
             array = np.flipud(array)
-            char_segments.append(array)
-
-            char_image = Image.fromarray(array).convert("L") #convert the array to an image and save it
+            char_segments[b].insert(0, array)
 
             if args.visualize:
-                util.makedirs(f"../Figures/char_segments/{filename}")
-                save_location = f"../Figures/char_segments/{filename}/char_segment_{b}_{n}.png"
+                char_image = Image.fromarray(array).convert("L") #convert the array to an image and save it
+                util.makedirs(f"Figures/char_segments/{filename}")
+                save_location = f"Figures/char_segments/{filename}/char_segment_{b}_{n}.png"
                 char_image.save(save_location, "PNG")
                 print(f"Saved image to {save_location}")
-        b += 1
 
     return char_segments
     
@@ -500,8 +499,8 @@ def segment_from_args(args, filename):
     if not args.visualize:
         print("Not visualizing intermediate results. Call this program with the option --visualize to visualize intermediate results.")
     else:
-        fig_dirs = ["../Figures/char_segments", "../Figures/line_segments",
-                    "../Figures/char_histograms", "../Figures/line_histograms"]
+        fig_dirs = ["Figures/char_segments", "Figures/line_segments",
+                    "Figures/char_histograms", "Figures/line_histograms"]
         util.makedirs(fig_dirs)
 
     binarized_image = Image.open(os.path.join(args.test_dataroot, filename))
@@ -521,7 +520,7 @@ def segment_from_args(args, filename):
         image = ImageOps.invert(binarized_image)
         image = image.rotate(best_rot)
         image = ImageOps.invert(image)
-        vis.draw_astar_lines(image, astar_paths, save_location=f"../Figures/astar_paths/{filename}/astar_line_segments.png")
+        vis.draw_astar_lines(image, astar_paths, save_location=f"Figures/astar_paths/{filename}/astar_line_segments.png")
 
 
     image = prepare_inverted_image(binarized_image, 1)

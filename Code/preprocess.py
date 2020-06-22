@@ -9,8 +9,9 @@ import PIL.Image as Image
 import PIL.ImageOps as ImageOps
 import numpy as np
 import os
-import util
 import torch
+
+import Code.util as util
 
 def center_of_mass(image):
     """Computes center of mass.
@@ -47,22 +48,24 @@ def crop_image(arr, cent_of_mass, crop_dims):
 
 def preprocess_arrays(arrs, src_filename=None, visualize=False, crop_dimensions=(63, 63)):
     if visualize:
-        util.makedirs("../Figures/cropped_chars")    
+        util.makedirs("Figures/cropped_chars")    
 
-    return_arrs = []
-    for index, arr in enumerate(arrs):
-        image = Image.fromarray(arr).convert("L")
-        cent_mass = center_of_mass(image)
+    return_arrs = [[] for _ in arrs]
+    for l_idx, line in enumerate(arrs):
+        for c_idx, char in enumerate(line):
+            image = Image.fromarray(char).convert("L")
+            cent_mass = center_of_mass(image)
 
-        image_arr = np.array(image)
-        image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
-        return_arrs.append(image_arr)
+            image_arr = np.array(image)
+            image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
+            return_arrs[l_idx].append(image_arr)
 
-        if visualize:
-            image = Image.fromarray(image_arr).convert("L")
-            util.makedirs(f"../Figures/cropped_chars/{src_filename}")
-            # TODO: Change index to correct row and index in that row
-            image.save(f"../Figures/cropped_chars/{src_filename}/char_{index}.png")
+            if visualize:
+                image = Image.fromarray(image_arr).convert("L")
+                util.makedirs(f"Figures/cropped_chars/{src_filename}")
+                # TODO: Change index to correct row and index in that row
+                image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
+
     return return_arrs
 
 def image_to_tensor(img, crop_dimensions=(63, 63)):
