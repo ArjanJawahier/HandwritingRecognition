@@ -30,7 +30,6 @@ To use the network we just trained to predict the text in the unsegmented binari
 ```bash
 python3 main.py path/to/test/data
 ```
-It is still necessary to specify a train_dataroot while predicting, because we can get the labels from this directory.
 
 ## What is in the Code folder?
 1. `segmentation.py` handles the line and character segmentation of input test images.
