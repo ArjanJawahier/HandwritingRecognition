@@ -2,9 +2,9 @@
 Handwriting Recognition project
 
 ## Dependencies
-We are using quite a number of dependencies, use the following command to install them:  
+We are using quite a number of dependencies. Use the following command to install them:  
 ```bash
-pip3 install numpy scikit-learn scikit-image torch torchvision Pillow
+pip3 install -r REQUIREMENTS.txt
 ```
 
 ## Data Augmentation
