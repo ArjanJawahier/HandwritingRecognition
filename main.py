@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--use_bias", action="store_true", default=True, help="whether to use biases in the neural network")
     parser.add_argument("--n_workers", type=int, default=2, help="number of workers for the dataloader")
     parser.add_argument("--n_classes", type=int, default=27, help="number of classes in the domain (letters in the Hebrew alphabet)")
-    parser.add_argument("--n_resnet_blocks", type=int, default=10, help="number of resnet blocks in the neural network")
+    parser.add_argument("--n_resnet_blocks", type=int, default=6, help="number of resnet blocks in the neural network")
 
     # Train options
     parser.add_argument("-ne", "--n_epochs", type=int, default=10, help="number of training epochs")
