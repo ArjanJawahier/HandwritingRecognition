@@ -122,8 +122,10 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
         print(f"Epoch {epoch_i} of {args.n_epochs}")
 
         # Get the data in batches
+        batch_index = 0
         for data, targets in train_data:
             # We perform our custom preprocessing
+            print(f"Batch {batch_index}/{len(train_data.dataset)/len(data)}", end="\r")
             data = data.numpy()
             data = preprocess.arrs_to_tensor(data, args)
             data = data.to(device)
@@ -134,7 +136,8 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
             loss = nll_loss(predictions, targets)
             loss.backward()
             optimizer.step()
-    
+            batch_index += 1
+
         if epoch_i % args.save_frequency == 0 or epoch_i == args.n_epochs:
             # Save the model in the save_dir
             network_name = f"network_{str(epoch_i).zfill(2)}.pt"
