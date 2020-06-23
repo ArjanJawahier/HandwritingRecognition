@@ -153,7 +153,7 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
             train_accs.append(train_acc)
             train_losses.append(train_loss)
             val_accs.append(val_acc)
-            val_loss.append(val_loss)
+            val_losses.append(val_loss)
 
     return train_accs, train_losses, val_accs, val_losses
 
