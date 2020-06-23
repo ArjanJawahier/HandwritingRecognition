@@ -165,7 +165,7 @@ def test(args, network, test_data, nll_loss, device):
     for data, targets in test_data:
         # We perform our custom preprocessing
         data = data.numpy()
-        data = preprocess.arrs_to_tensor(data, args.image_size)
+        data = preprocess.arrs_to_tensor(data, args)
         data = data.to(device)
         targets = targets.to(device)
         predictions = network(data)
