@@ -34,7 +34,6 @@ def parse_args():
     train_test_group.add_argument("-te", "--test", action= "store_true", help="whether to test a classifier, if both train and test are not specified, we predict the contents of the test_dataroot")
     parser.add_argument("--n_channels", type=int, default=1, help="number of color channels in the input data")
     parser.add_argument("--image_size", type=int, default=64, metavar="SIZE", help="both width and height of input images will be scaled to be SIZE pixels large")
-    parser.add_argument("--n_gpu", type=int, default=1, help="number of gpus that can be used")
 
     # Network options
     parser.add_argument("--nf", type=int, default=16, help="number of feature maps in conv layers")
@@ -53,7 +52,7 @@ def parse_args():
     parser.add_argument("-sd", "--save_dir", type=str, default="Networks", metavar="DIR", help="dirname where networks will be saved")
     
     # Test/segmentation options
-    parser.add_argument("--network_path", type=str, default="Networks/network_10.pt", help="The filepath of the network you want to test.")
+    parser.add_argument("--network_path", type=str, default="Networks/network_05_epochs_1000_6blocks.pt", help="The filepath of the network you want to test.")
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
     parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
