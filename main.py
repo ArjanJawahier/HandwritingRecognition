@@ -34,7 +34,6 @@ def parse_args():
     train_test_group.add_argument("-te", "--test", action= "store_true", help="whether to test a classifier, if both train and test are not specified, we predict the contents of the test_dataroot")
     parser.add_argument("--n_channels", type=int, default=1, help="number of color channels in the input data")
     parser.add_argument("--image_size", type=int, default=64, metavar="SIZE", help="both width and height of input images will be scaled to be SIZE pixels large")
-    parser.add_argument("--n_gpu", type=int, default=1, help="number of gpus that can be used")
 
     # Network options
     parser.add_argument("--nf", type=int, default=16, help="number of feature maps in conv layers")
