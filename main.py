@@ -226,6 +226,7 @@ def main():
         plt.title("Train accuracy vs. validation accuracy")
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
+        plt.legend(["Train", "Val"])
         plt.savefig("acc_curves.pdf")
 
         fig = plt.figure()
@@ -234,6 +235,7 @@ def main():
         plt.title("Train loss vs. validation loss")
         plt.xlabel("Epoch")
         plt.ylabel("Negative log-likelihood loss")
+        plt.legend(["Train", "Val"])
         plt.savefig("loss_curves.pdf")
 
 
