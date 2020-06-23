@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from skimage.transform import resize
 import numpy as np
 import PIL.Image as Image
+import matplotlib.pyplot as plt
 
 import Code.util as util
 import Code.characterclassifier as cc
@@ -115,6 +116,8 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
         device       -- Either cpu or cuda, cuda provides faster training
         valid_data   -- DataLoader object that yields data in batches, used for validation
     """
+    train_accs, train_losses, val_accs, val_losses = [], [], [], []
+
     for epoch_i in range(1, args.n_epochs+1):
         print(f"Epoch {epoch_i} of {args.n_epochs}")
 
@@ -122,7 +125,7 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
         for data, targets in train_data:
             # We perform our custom preprocessing
             data = data.numpy()
-            data = preprocess.arrs_to_tensor(data, args.image_size)
+            data = preprocess.arrs_to_tensor(data, args)
             data = data.to(device)
             targets = targets.to(device)
             optimizer.zero_grad()
@@ -140,9 +143,19 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
 
         # Validate on validation set
         with torch.no_grad():
-            test(args, network, valid_data, nll_loss, device, prefix="Val")
+            train_acc, train_loss = test(args, network, train_data, nll_loss, device)
+            val_acc, val_loss = test(args, network, valid_data, nll_loss, device)
+            print(f"Train acc: {train_acc:.3f}, Train loss: {train_loss:.3f}")
+            print(f"Val acc: {val_acc:.3f}, Val loss: {val_loss:.3f}")
+            train_accs.append(train_acc)
+            train_losses.append(train_loss)
+            val_accs.append(val_acc)
+            val_loss.append(val_loss)
 
-def test(args, network, test_data, nll_loss, device, prefix="Test"):
+    return train_accs, train_losses, val_accs, val_losses
+
+
+def test(args, network, test_data, nll_loss, device):
     losses = []
     n_correct = 0
     n_preds = 0
@@ -163,7 +176,7 @@ def test(args, network, test_data, nll_loss, device, prefix="Test"):
         losses.append(loss.detach().cpu().numpy())
     avg_loss = np.average(np.array(losses))
     accuracy = n_correct / n_preds
-    print(f"{prefix} Accuracy: {accuracy:.3f},    {prefix} loss: {avg_loss:.3f}")
+    return accuracy, avg_loss
 
 def predict(args, network, data, device, labels):
     returned_characters = []
@@ -195,26 +208,59 @@ def main():
         util.makedirs(args.save_dir)
         clf = cc.CharacterClassifier(args).to(device)
         nll_loss = torch.nn.NLLLoss().to(device)
-        optimizer = torch.optim.Adam(clf.parameters(), lr=args.learning_rate, betas=(args.beta1, args.beta2))
-        train(args, clf, train_dataloader, nll_loss, optimizer, device, valid_dataloader)
+        optimizer = torch.optim.Adam(
+            clf.parameters(),
+            lr=args.learning_rate,
+            betas=(args.beta1, args.beta2)
+        )
+        train_accs, train_losses, val_accs, val_losses= train(
+            args, clf, train_dataloader, nll_loss,
+            optimizer, device, valid_dataloader
+        )
+        fig = plt.figure()
+        plt.plot(train_accs, 'b')
+        plt.plot(val_accs, 'r')
+        plt.title("Train accuracy vs. validation accuracy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.savefig("acc_curves.pdf")
+
+        fig = plt.figure()
+        plt.plot(train_losses, 'b')
+        plt.plot(val_losses, 'r')
+        plt.title("Train loss vs. validation loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Negative log-likelihood loss")
+        plt.savefig("loss_curves.pdf")
+
 
     elif args.test:
         _, _, test_dataloader = create_dataloaders(args)
 
         if not args.network_path:
-            argument_error("No network_path specified in command line arguments, which is required if you want to test.")
+            argument_error(
+                "No network_path specified in command line arguments, "
+                "which is required if you want to test."
+            )
 
         clf = cc.CharacterClassifier(args).to(device)
         clf.load_state_dict(torch.load(args.network_path))
         clf.eval()
         nll_loss = torch.nn.NLLLoss().to(device)
-        test(args, clf, test_dataloader, nll_loss, device)
+        test_acc, test_loss = test(args, clf, test_dataloader, nll_loss, device)
+        print(f"Test acc: {test_acc:.3f}, test loss: {test_loss:.3f}")
 
     else:
         if not os.path.isdir(args.test_dataroot):
-            argument_error(f"The specified test_dataroot {args.test_dataroot} is not a directory!")
+            argument_error(
+                f"The specified test_dataroot {args.test_dataroot} "
+                "is not a directory!"
+            )
         elif not args.network_path:
-            argument_error("No network_path specified in command line arguments, which is required if you want to predict.")
+            argument_error(
+                "No network_path specified in command line arguments, "
+                "which is required if you want to predict."
+            )
 
         class_labels = {
             'Alef': 0, 'Ayin': 1, 'Bet': 2, 'Dalet': 3, 'Gimel': 4, 'He': 5,

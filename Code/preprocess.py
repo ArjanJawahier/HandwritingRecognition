@@ -75,11 +75,11 @@ def image_to_tensor(img, crop_dimensions=(63, 63)):
     # image = Image.fromarray(img).convert("L")
     cent_mass = center_of_mass(image)
     image_arr = np.array(image)
-    image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
+    image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
     return torch.Tensor(image_arr)
 
 
-def arrs_to_tensor(arrs, image_size, crop_dimensions=(63, 63)):
+def arrs_to_tensor(arrs, args, crop_dimensions=(63, 63)):
     # This expects numpy arrays
     return_arr = []
     for img in arrs:
@@ -87,8 +87,8 @@ def arrs_to_tensor(arrs, image_size, crop_dimensions=(63, 63)):
         img = Image.fromarray(img).convert("L")
         cent_mass = center_of_mass(img)
         img = np.array(img, dtype=np.uint8)
-        img = crop_image(img, cent_mass, crop_dimensions) / 255
-        img = resize(img, (image_size, image_size))
+        img = crop_image(img, cent_mass, crop_dimensions, args) / 255
+        img = resize(img, (args.image_size, args.image_size))
         img = img.reshape(1, img.shape[0], img.shape[1]) 
         return_arr.append(img)
     return_arr = np.array(return_arr)
