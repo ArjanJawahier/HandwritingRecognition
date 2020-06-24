@@ -10,8 +10,7 @@ import numpy as np
 import os
 import torch
 import math
-
-import Code.util as util
+import util
 
 
 class StyleClassifier:
@@ -29,7 +28,7 @@ class StyleClassifier:
                     print(style, character)
                 else:
                     for file in os.listdir(self.train_data + style + "/" + character + "/"):
-                        if file.endswith(".jpg") and not ("_00" in file):
+                        if file.endswith(".jpg"):
                             img = Image.open(os.path.join(
                                 self.train_data + style + "/" + character + "/", file))
                             eh.append(self.edge_hinge(img))
@@ -88,36 +87,9 @@ if __name__ == "__main__":
     incorrect = 0
     result_dict = {}
     character_dict = {}
-    for style in os.listdir("../Style_Data/"):
-        for character in os.listdir("../Style_Data/" + style + "/"):
-            for file in os.listdir("../Style_Data/" + style + "/" + character + "/"):
-                if file.endswith(".jpg") and ("_00" in file):
-                    img = Image.open(os.path.join(
-                        "../Style_Data/" + style + "/" + character + "/", file))
-                    cs = classifier.predict_style(img)
-                    try:
-                        correct_char, incorrect_char = character_dict[character]
-                    except:
-                        correct_char, incorrect_char = (0, 0)
-                    if cs == style:
-                        character_dict[character] = (
-                            correct_char + 1, incorrect_char)
-                        correct += 1
-                    else:
-                        character_dict[character] = (
-                            correct_char, incorrect_char + 1)
-                        incorrect += 1
-                    try:
-                        result_dict[style][cs] += 1
-                    except:
-                        try:
-                            result_dict[style][cs] = 1
-                        except:
-                            result_dict[style] = {}
-                            result_dict[style][cs] = 1
-
-    print(correct)
-    print(incorrect)
-
-    print(result_dict)
-    print(character_dict)
+    for character in os.listdir("../Train_Data/"):
+        for file in os.listdir("../Train_Data/" + character):
+            if file.endswith(".pgm"):
+                img = Image.open(os.path.join(
+                    "../Train_Data/" + character, file))
+                cs = classifier.predict_style(img)
