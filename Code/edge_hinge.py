@@ -10,6 +10,7 @@ import numpy as np
 import os
 import util
 import torch
+import math
 
 
 class StyleClassifier:
@@ -56,57 +57,23 @@ class StyleClassifier:
         width, height = img.size
         eh = np.zeros(((frag_length - 1) * 8, (frag_length - 1) * 8))
         pic = np.array(img)
-        for x in range(frag_length + 1, width - frag_length - 1):
-            for y in range(frag_length + 1, height - frag_length - 1):
+        for x in range(frag_length, width - frag_length):
+            for y in range(frag_length, height - frag_length):
                 count = 1
                 found = False
                 init = 1
-                for z in range(0, frag_length - 1):
-                    if not found:
-                        if pic[y - z, x + frag_length] == 1:
-                            found = True
-                            init = count
-                    else:
-                        if pic[y - z, x + frag_length] == 1:
-                            eh[init, count] += 1
-                    count += 1
-                for z in range(frag_length - 2, -(frag_length - 1) + 1, -1):
-                    if not found:
-                        if pic[y - frag_length, x - z] == 1:
-                            found = True
-                            init = count
-                    else:
-                        if pic[y - frag_length, x - z] == 1:
-                            eh[init, count] += 1
-                    count += 1
-                for z in range(frag_length - 1, -(frag_length - 1) + 1, -1):
-                    if not found:
-                        if pic[y - z, x - frag_length] == 1:
-                            found = True
-                            init = count
-                    else:
-                        if pic[y - z, x - frag_length] == 1:
-                            eh[init, count] += 1
-                    count += 1
-                for z in range(-(frag_length - 1), (frag_length - 2) - 1):
-                    if not found:
-                        if pic[y + frag_length, x + z] == 1:
-                            found = True
-                            init = count
-                    else:
-                        if pic[y + frag_length, x + z] == 1:
-                            eh[init, count] += 1
-                    count += 1
-                for z in range(-(frag_length - 1), 0 - 1):
-                    if not found:
-                        if pic[y - z, x + frag_length] == 1:
-                            found = True
-                            init = count
-                    else:
-                        if pic[y - z, x + frag_length] == 1:
-                            found = True
-                            eh[init, count] += 1
-                    count += 1
+                for z_1 in range(-frag_length, frag_length):
+                    for z_2 in range(-frag_length, frag_length):
+                        if (z_1 == -frag_length or z_1 == frag_length or z_2 == -frag_length or z_2 == frag_length):
+                            if not found:
+                                if pic[y + z_2, x + z_1] == 1:
+                                    found = True
+                                    init = count
+                            else:
+                                if pic[y + z_2, x + z_1] == 1:
+                                    found = True
+                                    eh[init, count] += 1
+                            count += 1
 
         if sum(sum(eh)) > 0:
             eh = eh / sum(sum(eh))
