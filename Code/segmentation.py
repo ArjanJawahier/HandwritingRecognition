@@ -336,6 +336,64 @@ def supersample_path(path):
 
     return path
 
+def find_single_multi_char(img_arr, filename, args):
+    #if the contour is too wide add the image_arr to re_analize_arr
+    output_arr = []
+    for index, arr in enumerate(img_arr):
+        a = Image.fromarray(arr)
+        inv_img = np.invert(arr)
+        contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+        max_y_arr = []
+        min_y_arr = []
+        max_x_arr = []
+        min_x_arr = []
+        min_x = np.inf
+        max_x = 0
+        min_y = np.inf
+        max_y = 0
+        for k, cont in enumerate(contours):
+            min_x = np.inf
+            max_x = 0
+            min_y = np.inf
+            max_y = 0
+            for i, pixel in enumerate(cont): #find the length of all the contours in the image
+                if pixel[0][0] < min_x:
+                  min_x = pixel[0][0]
+                if pixel[0][0] > max_x:
+                   max_x = pixel[0][0]
+                if pixel[0][1] < min_y:
+                   min_y = pixel[0][1]
+                if pixel[0][1] > max_y:
+                    max_y = pixel[0][1]
+            max_x_arr.append(max_x)
+            min_x_arr.append(min_x)
+            max_y_arr.append(max_y)
+            min_y_arr.append(min_y)
+        if (max(max_x_arr) - min(min_x_arr)) > 110: #first check is the width of all contours in the original segment
+            if len(contours[0] != 0): #if there are multiple blobs
+                for k, cont in enumerate(contours): #go over the different blobs in the original segment
+                    if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
+                        matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
+                        c = np.asarray(matrix)
+                        cv.drawContours(c, contours, k, (0,0,0), -1)
+                        # cc = Image.fromarray(c)
+                        # fig = plt.figure(figsize=(5,5))
+                        # fig.add_subplot(1,2,1)
+                        # plt.imshow(a)
+                        # fig.add_subplot(1,2,2)
+                        # plt.imshow(cc)
+                        # plt.show()
+                        if np.amin(c) > 0: 
+                            output_arr.append(c)
+        else:
+            output_arr.append(arr)
+        max_y_arr = []
+        min_y_arr = []
+        max_x_arr = []
+        min_x_arr = []        
+    
+    return output_arr
+
 def extract_line_images(img_arr, astar_paths, n_cols, filename, visualize):
     segment_arrs = []
     for index, segment_bottom_path in enumerate(astar_paths[1:]):
@@ -601,7 +659,8 @@ def segment_from_args(args, filename):
     segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args.visualize)
     char_astar_paths = segment_characters(segmented_lines, filename, args)
     segmented_characters = extract_char_images(char_astar_paths, segmented_lines, filename, args)
-    return segmented_characters
+    all_segmented_characters = find_single_multi_char(segmented_characters, filename, args)
+    return all_segmented_characters
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Segmentation, this file should not be directly run.")
