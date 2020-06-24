@@ -9,8 +9,9 @@ import PIL.Image as Image
 import PIL.ImageOps as ImageOps
 import numpy as np
 import os
-import util
 import torch
+
+import Code.util as util
 
 def center_of_mass(image):
     """Computes center of mass.
@@ -22,7 +23,7 @@ def center_of_mass(image):
     cent_mass = ndimage.measurements.center_of_mass(inverted_arr)
     return cent_mass
 
-def crop_image(arr, cent_of_mass, crop_dims):
+def crop_image(arr, cent_of_mass, crop_dims, args):
     cent_r, cent_c = cent_of_mass
     cent_r, cent_c = int(cent_r), int(cent_c)
     
@@ -43,37 +44,42 @@ def crop_image(arr, cent_of_mass, crop_dims):
                 continue
 
             cropped[new_r, new_c] = arr[r, c]
+
     return cropped
 
-def preprocess_arrays(arrs, src_filename=None, visualize=False, crop_dimensions=(63, 63)):
-    if visualize:
-        util.makedirs("../Figures/cropped_chars")    
+def preprocess_arrays(arrs, args, src_filename=None, crop_dimensions=(63, 63)):
+    if args.visualize:
+        util.makedirs("Figures/cropped_chars")    
 
-    return_arrs = []
-    for index, arr in enumerate(arrs):
-        image = Image.fromarray(arr).convert("L")
-        cent_mass = center_of_mass(image)
+    return_arrs = [[] for _ in arrs]
+    for l_idx, line in enumerate(arrs):
+        for c_idx, char in enumerate(line):
+            image = Image.fromarray(char).convert("L")
+            cent_mass = center_of_mass(image)
 
-        image_arr = np.array(image)
-        image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
-        return_arrs.append(image_arr)
+            image_arr = np.array(image)
+            image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
 
-        if visualize:
-            image = Image.fromarray(image_arr).convert("L")
-            util.makedirs(f"../Figures/cropped_chars/{src_filename}")
-            # TODO: Change index to correct row and index in that row
-            image.save(f"../Figures/cropped_chars/{src_filename}/char_{index}.png")
+            if np.sum(np.absolute(image_arr/255 - 1)) > args.n_black_pix_threshold:
+                return_arrs[l_idx].append(image_arr)
+
+            if args.visualize:
+                image = Image.fromarray(image_arr).convert("L")
+                util.makedirs(f"Figures/cropped_chars/{src_filename}")
+                image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
+
+
     return return_arrs
 
 def image_to_tensor(img, crop_dimensions=(63, 63)):
     # image = Image.fromarray(img).convert("L")
     cent_mass = center_of_mass(image)
     image_arr = np.array(image)
-    image_arr = crop_image(image_arr, cent_mass, crop_dimensions)
+    image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
     return torch.Tensor(image_arr)
 
 
-def arrs_to_tensor(arrs, image_size, crop_dimensions=(63, 63)):
+def arrs_to_tensor(arrs, args, crop_dimensions=(63, 63)):
     # This expects numpy arrays
     return_arr = []
     for img in arrs:
@@ -81,8 +87,8 @@ def arrs_to_tensor(arrs, image_size, crop_dimensions=(63, 63)):
         img = Image.fromarray(img).convert("L")
         cent_mass = center_of_mass(img)
         img = np.array(img, dtype=np.uint8)
-        img = crop_image(img, cent_mass, crop_dimensions) / 255
-        img = resize(img, (image_size, image_size))
+        img = crop_image(img, cent_mass, crop_dimensions, args) / 255
+        img = resize(img, (args.image_size, args.image_size))
         img = img.reshape(1, img.shape[0], img.shape[1]) 
         return_arr.append(img)
     return_arr = np.array(return_arr)

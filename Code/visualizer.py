@@ -10,7 +10,8 @@ import PIL.Image as Image
 import PIL.ImageDraw as ImageDraw
 import os
 import numpy as np
-import util
+
+import Code.util as util
 
 def plot_histogram(hist, fig_filepath, minima=None):
     """Plots the given array of counts of black pixels as a
@@ -29,10 +30,10 @@ def plot_histogram(hist, fig_filepath, minima=None):
     print(f"Saved histogram figure to {fig_filepath}.")
     plt.close()
 
-def draw_straight_lines(image, best_minima_rowindices, save_location="../Figures/best_line_segments.png"):
+def draw_straight_lines(image, best_minima_rowindices, save_location="Figures/best_line_segments.png"):
     """Draws straight lines on image that signify the local minima.
     Saves the drawn on image to the save_location, which is
-    set to '../Figures/best_line_segments.png' by default.
+    set to 'Figures/best_line_segments.png' by default.
     """
     drawer = ImageDraw.Draw(image)
     for line_y in best_minima_rowindices:
@@ -41,12 +42,12 @@ def draw_straight_lines(image, best_minima_rowindices, save_location="../Figures
     print(f"Saved image to {save_location}")
 
 def draw_astar_lines(image, astar_paths, 
-                     save_location="../Figures/astar_paths/astar_line_segments.png",
+                     save_location="Figures/astar_paths/astar_line_segments.png",
                      color="#FF0000",
                      width=None):
     """Draws paths on image that signify the segmented lines.
     Saves the drawn on image to the save_location, which is
-    set to '../Figures/astar_line_segments.png' by default.
+    set to 'Figures/astar_line_segments.png' by default.
     """
     save_dir = "/".join(save_location.split("/")[:-1])
     util.makedirs(save_dir)

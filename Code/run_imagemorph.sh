@@ -5,7 +5,7 @@ for char_dir in $char_dirs
     do 
         char_files=($char_dir/*)
         n_files=$(ls $char_dir -1 | wc -l)
-        let n_needed=300-$n_files
+        let n_needed=1000-$n_files
         for i in $(seq 1 $n_needed)
             do 
                 index=$((i%n_files))
