@@ -13,6 +13,7 @@ from scipy.signal import savgol_filter
 import multiprocessing
 from multiprocessing import Process, Queue
 import time
+import cv2 as cv
 
 from Code.persistence.persistence1d import RunPersistence
 import Code.visualizer as vis
@@ -33,7 +34,6 @@ def find_best_rotation(image, filename, args):
     """
     min_avg = np.inf
     for rotation in range(-6, 6, 1):
-    # for rotation in [1]: # found that 1 was the best in my test case
         rotated_image = image.rotate(rotation)
         minima_indices, avg_of_local_minima = line_segment(rotated_image, rotation, args.visualize, args.persistence_threshold, filename)
         if avg_of_local_minima < min_avg:
@@ -86,17 +86,10 @@ def create_histogram(image_array, smooth=15):
     normalizes it and returns a 
     histogram of black pixels per row.
     """
-    def normalize_mapping(x):
-        return x//255
-
-    def invert_mapping(x):
-        return (x - 1) * -1
-
-    arr = np.array(list(map(normalize_mapping, image_array)))
-
-    if arr[0, 0] != 0:
-        # Most likely, this array has not been inverted yet
-        arr = np.array(list(map(invert_mapping, arr)))
+    arr = image_array / 255
+    if arr[0, 0] == 1:
+        arr -= 1
+        arr = np.absolute(arr)
 
     hist_list = []
     for row in arr:
@@ -150,11 +143,7 @@ class Node:
         return f"(pos: {self.position}, f: {self.f})"
 
 def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampling):
-
-    def normalize_mapping(x):
-        return x//255
-
-    arr = np.array(list(map(normalize_mapping, image_array)))
+    arr = image_array / 255
     astar_paths = []
 
     manager = multiprocessing.Manager()
@@ -336,63 +325,6 @@ def supersample_path(path):
 
     return path
 
-def find_single_multi_char(img_arr, filename, args):
-    #if the contour is too wide add the image_arr to re_analize_arr
-    output_arr = []
-    for index, arr in enumerate(img_arr):
-        a = Image.fromarray(arr)
-        inv_img = np.invert(arr)
-        contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
-        max_y_arr = []
-        min_y_arr = []
-        max_x_arr = []
-        min_x_arr = []
-        min_x = np.inf
-        max_x = 0
-        min_y = np.inf
-        max_y = 0
-        for k, cont in enumerate(contours):
-            min_x = np.inf
-            max_x = 0
-            min_y = np.inf
-            max_y = 0
-            for i, pixel in enumerate(cont): #find the length of all the contours in the image
-                if pixel[0][0] < min_x:
-                  min_x = pixel[0][0]
-                if pixel[0][0] > max_x:
-                   max_x = pixel[0][0]
-                if pixel[0][1] < min_y:
-                   min_y = pixel[0][1]
-                if pixel[0][1] > max_y:
-                    max_y = pixel[0][1]
-            max_x_arr.append(max_x)
-            min_x_arr.append(min_x)
-            max_y_arr.append(max_y)
-            min_y_arr.append(min_y)
-        if (max(max_x_arr) - min(min_x_arr)) > 110: #first check is the width of all contours in the original segment
-            if len(contours[0] != 0): #if there are multiple blobs
-                for k, cont in enumerate(contours): #go over the different blobs in the original segment
-                    if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
-                        matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
-                        c = np.asarray(matrix)
-                        cv.drawContours(c, contours, k, (0,0,0), -1)
-                        # cc = Image.fromarray(c)
-                        # fig = plt.figure(figsize=(5,5))
-                        # fig.add_subplot(1,2,1)
-                        # plt.imshow(a)
-                        # fig.add_subplot(1,2,2)
-                        # plt.imshow(cc)
-                        # plt.show()
-                        if np.amin(c) > 0: 
-                            output_arr.append(c)
-        else:
-            output_arr.append(arr)
-        max_y_arr = []
-        min_y_arr = []
-        max_x_arr = []
-        min_x_arr = []        
-    
-    return output_arr
 
 def extract_line_images(img_arr, astar_paths, n_cols, filename, visualize):
     segment_arrs = []
@@ -520,102 +452,139 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
         l_idx += 1
     return char_segments
 
-# Deprecated, reason: "This function is a bit long and hard to decipher"
-def extract_char_images_old(char_astar_paths, line_segments, filename, args):
-    char_segments = [[] for _ in range(len(char_astar_paths))]
-    for b in range(len(char_astar_paths)): #go over every individual path
-        path = char_astar_paths[b]
-        for n in range(len(path)+1): #go over every line in the path plus one to get 4 areas for 3 lines that are saved
+
+def find_single_multi_char(img_arr, filename, args):
+    #if the contour is too wide add the image_arr to re_analize_arr
+
+    # Correction: We need a 2d output array, one array for each line in the image
+    output_arr = []
+    for index, arr in enumerate(img_arr):
+        # Question: Why is this a here? It is not used in the remainder of the code
+        a = Image.fromarray(arr)
+
+        inv_img = np.invert(arr)
+        contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+        max_y_arr = []
+        min_y_arr = []
+        max_x_arr = []
+        min_x_arr = []
+        min_x = np.inf
+        max_x = 0
+        min_y = np.inf
+        max_y = 0
+        for k, cont in enumerate(contours):
+            min_x = np.inf
             max_x = 0
-            min_y = 0
-            line_array = []
-            edit_line_array = []
-            if n == (len(path)): # case when the area is form the top of the path to the previous red line
-                min_y = len(line_segments[b][1]) # these values are used to initialize a 2d array with the sizes of the furthest outsticking line parts
-                max_x = len(line_segments[b])
-                try:
-                    max_y = save_max_y
-                except UnboundLocalError as err:
-                    print(f"Skipping in extract_char_images due to error: {err}")
-                    continue
-            else:
-                prev = np.inf
-                # this for loop finds the dimensions of the array which copies the character
-                for x in range(len(path[n])): 
-                    if path[n][x][1] > min_y:
-                        min_y = path[n][x][1]
-                    if path[n][x][0] > max_x:
-                        max_x = path[n][x][0]
-                    if x > 0:
-                        if path[n][x][0] != prev:
-                            line_array.append(path[n][x])   #line_array saves all the line values that do not lie vertically above each other
-                    else:
-                       line_array.append(path[n][x])
-                    prev = path[n][x][0]
-                if n > 0: # if the area under any other than the first red line is to be saved
-                    max_y = np.inf
-                    for z in range(len(path[n-1])):
-                        if path[n-1][z][1] < max_y:
-                             max_y = path[n-1][z][1]
-            if n > 0:
-                save_max_y = max_y #save the highest laying value of this line
-            if n == 0: #if it is the first red line
-                array = [[255 for col in range(max_x+1)] for row in range(min_y)] #fill the array of the correct size with white pixel values
-            elif n == len(path): #if it is the last red line
-                array = [[255 for col in range(max_x+1)] for row in range(len(line_segments[b][0])-max_y)]
-            else: #if it is any of the inbetween red lines
-                array = [[255 for col in range(max_x+1)] for row in range(min_y-max_y)]
-
-            for h in range(len(line_array)): #flip the y values since the path is turned on its side in line_segments
-                dis = len(line_segments[b][0])-line_array[h][1]
-                edit_line_array.append((line_array[h][0],dis))
-
-            min_y = len(line_segments[b][0]) - min_y #flip this value as well because of the turning of the path
-
-
-            n_black_pix = 0
-            # go over every segment and save the pixel values in array
-
-            for i in range(len(edit_line_array)): 
-                if n == 0: #if it is the first red line
-                    for j in range(edit_line_array[i][1],len(line_segments[b][0])): # goes over the y-values to and from the red lines
-                        if line_segments[b][i][j] < 128:
-                            array[j-min_y][i] = 0
-                            n_black_pix += 1
-                elif n == len(path): #if it is the last red line
-                    for j in range(prev_line_array[i][1]):
-                        if line_segments[b][i][j] < 128:
-                            array[j][i] = 0
-                            n_black_pix += 1
-                else: #if it is any of the inbetween red lines
-                    for j in range(edit_line_array[i][1],prev_line_array[i][1]):
-                        if line_segments[b][i][j] < 128:
-                            array[j-min_y][i] = 0
-                            n_black_pix += 1
-
-            prev_line_array = edit_line_array
-            if n_black_pix < args.n_black_pix_threshold:
-                # If we did not encounter n_black_pix_theshold black pixels, continue with the next segment
-                continue
-
-            array = np.asarray(array, dtype=np.uint8)
-
-            # Rotate 90 degrees and flip the array for reconstruction of original orientation
-            # MIGHTDO: Find out why the images are flipped and fix that, then remove the np.flipud here
-            array = np.rot90(array)
-            array = np.flipud(array)
-            char_segments[b].insert(0, array)
-
-        if args.visualize:
-            for s_idx, char_segment in enumerate(char_segments[b]):
-                char_image = Image.fromarray(char_segment).convert("L") #convert the array to an image and save it
-                util.makedirs(f"Figures/char_segments/{filename}")
-                save_location = f"Figures/char_segments/{filename}/char_segment_{b}_{s_idx}.png"
-                char_image.save(save_location, "PNG")
-                print(f"Saved image to {save_location}")
-
-    return char_segments
+            min_y = np.inf
+            max_y = 0
+            for i, pixel in enumerate(cont): #find the length of all the contours in the image
+                if pixel[0][0] < min_x:
+                  min_x = pixel[0][0]
+                if pixel[0][0] > max_x:
+                   max_x = pixel[0][0]
+                if pixel[0][1] < min_y:
+                   min_y = pixel[0][1]
+                if pixel[0][1] > max_y:
+                    max_y = pixel[0][1]
+            max_x_arr.append(max_x)
+            min_x_arr.append(min_x)
+            max_y_arr.append(max_y)
+            min_y_arr.append(min_y)
+        if (max(max_x_arr) - min(min_x_arr)) > 110: #first check is the width of all contours in the original segment
+            if len(contours[0] != 0): #if there are multiple blobs
+                for k, cont in enumerate(contours): #go over the different blobs in the original segment
+                    if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
+                        matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
+                        c = np.asarray(matrix)
+                        cv.drawContours(c, contours, k, (0,0,0), -1)
+                        # cc = Image.fromarray(c)
+                        # fig = plt.figure(figsize=(5,5))
+                        # fig.add_subplot(1,2,1)
+                        # plt.imshow(a)
+                        # fig.add_subplot(1,2,2)
+                        # plt.imshow(cc)
+                        # plt.show()
+                        if np.amin(c) > 0: 
+                            output_arr.append(c)
+        else:
+            output_arr.append(arr)
+        max_y_arr = []
+        min_y_arr = []
+        max_x_arr = []
+        min_x_arr = []        
     
+    return output_arr
+
+def find_single_multi_char_does_not_crash_but_results_are_also_wrong(img_arr, filename, args):
+    # Correction: We need a 2d output array, one array for each line in the image
+    output_arr = [[] for _ in img_arr]
+    for idx, line in enumerate(img_arr):
+        for l_idx, char_seg in enumerate(line):
+            arr = np.array(char_seg, dtype=np.uint8)
+
+            inv_img = np.invert(arr)
+            contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+            max_y_arr = []
+            min_y_arr = []
+            max_x_arr = []
+            min_x_arr = []
+            min_x = np.inf
+            max_x = 0
+            min_y = np.inf
+            max_y = 0
+
+            for k, cont in enumerate(contours):
+                min_x = np.inf
+                max_x = 0
+                min_y = np.inf
+                max_y = 0
+                for i, pixel in enumerate(cont): #find the length of all the contours in the image
+                    if pixel[0][0] < min_x:
+                      min_x = pixel[0][0]
+                    if pixel[0][0] > max_x:
+                       max_x = pixel[0][0]
+                    if pixel[0][1] < min_y:
+                       min_y = pixel[0][1]
+                    if pixel[0][1] > max_y:
+                        max_y = pixel[0][1]
+                max_x_arr.append(max_x)
+                min_x_arr.append(min_x)
+                max_y_arr.append(max_y)
+                min_y_arr.append(min_y)
+
+            #first check is the width of all contours in the original segment
+            if max(max_x_arr) - min(min_x_arr) > 110:
+                if len(contours[0]) != 0:
+                    for k, cont in enumerate(contours): #go over the different blobs in the original segment
+                        if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
+                            matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
+                            c = np.array(matrix, dtype=np.uint16)
+                            c_UMat = cv.UMat(c)
+                            cv.drawContours(c_UMat, contours, k, 0, -1)
+                            c = cv.UMat.get(c_UMat)
+                            if np.sum(c_inv) > args.n_black_pix_threshold: 
+                                output_arr[idx].append(c)
+                                if args.visualize:
+                                    util.makedirs([
+                                        f"Figures/split_char_images/{filename}"
+                                    ])
+                                    c_im = Image.fromarray(c).convert("L")
+                                    save_loc = f"Figures/split_char_images/{filename}/split_char_image_{idx}_{l_idx}_{k}.png"
+                                    c_im.save(save_loc, "PNG")
+                                    print(f"Saved image to {save_loc}")
+            else:
+                output_arr[idx].append(arr)
+                if args.visualize:
+                    util.makedirs([
+                        f"Figures/split_char_images/{filename}"
+                    ])
+                    c_im = Image.fromarray(arr).convert("L")
+                    save_loc = f"Figures/split_char_images/{filename}/split_char_image_{idx}_{l_idx}.png"
+                    c_im.save(save_loc, "PNG")
+                    print(f"Saved image to {save_loc}")
+
+    return output_arr
+
 def segment_from_args(args, filename):
     print(f"Segmenting {filename}")
     if args.visualize:
@@ -624,6 +593,7 @@ def segment_from_args(args, filename):
         util.makedirs(fig_dirs)
 
     binarized_image = Image.open(os.path.join(args.test_dataroot, filename))
+    binarized_image = binarized_image.convert("L")
     image = prepare_inverted_image(binarized_image, args.subsampling)
     best_rot, minima_indices = find_best_rotation(image, filename, args)
     image = rotate_invert_image(image, best_rot)
@@ -659,8 +629,8 @@ def segment_from_args(args, filename):
     segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args.visualize)
     char_astar_paths = segment_characters(segmented_lines, filename, args)
     segmented_characters = extract_char_images(char_astar_paths, segmented_lines, filename, args)
-    all_segmented_characters = find_single_multi_char(segmented_characters, filename, args)
-    return all_segmented_characters
+    finer_segmented_chars = find_single_multi_char(segmented_characters, filename, args)
+    return finer_segmented_chars
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Segmentation, this file should not be directly run.")
