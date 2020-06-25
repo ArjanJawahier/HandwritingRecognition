@@ -11,13 +11,28 @@ import os
 import torch
 import math
 import util
+import _pickle as pickle
 
 
 class StyleClassifier:
 
-    def __init__(self, train_data="../Style_Data/"):
-        self.train_data = train_data
-        self.average_styles = self.make_average_styles()
+    def __init__(self, train_data="../Style_Data/", use_dict="style_data.pkl"):
+        
+        if len(use_dict) == 0:
+            self.train_data = train_data
+            self.average_styles = self.make_average_styles()
+
+            # with open('style_data.txt', 'w') as f:
+            #     print(self.average_styles, file=f)
+
+            dict_file = open("style_data.pkl", "wb")
+            pickle.dump(self.average_styles, dict_file)
+            dict_file.close()
+
+        else:
+            dict_file = open(use_dict, "rb")
+            self.average_styles = pickle.load(dict_file)
+            dict_file.close()
 
     def make_average_styles(self):
         average_styles = {}
@@ -74,7 +89,6 @@ class StyleClassifier:
                                     found = True
                                     eh[init, count] += 1
                             count += 1
-
         if sum(sum(eh)) > 0:
             eh = eh / sum(sum(eh))
 
@@ -87,9 +101,36 @@ if __name__ == "__main__":
     incorrect = 0
     result_dict = {}
     character_dict = {}
-    for character in os.listdir("../Train_Data/"):
-        for file in os.listdir("../Train_Data/" + character):
-            if file.endswith(".pgm"):
-                img = Image.open(os.path.join(
-                    "../Train_Data/" + character, file))
-                cs = classifier.predict_style(img)
+    for style in os.listdir("../Style_Data/"):
+        for character in os.listdir("../Style_Data/" + style + "/"):
+            for file in os.listdir("../Style_Data/" + style + "/" + character + "/"):
+                if file.endswith(".jpg") and ("_00" in file):
+                    img = Image.open(os.path.join(
+                        "../Style_Data/" + style + "/" + character + "/", file))
+                    cs = classifier.predict_style(img)
+                    try:
+                        correct_char, incorrect_char = character_dict[character]
+                    except:
+                        correct_char, incorrect_char = (0, 0)
+                    if cs == style:
+                        character_dict[character] = (
+                            correct_char + 1, incorrect_char)
+                        correct += 1
+                    else:
+                        character_dict[character] = (
+                            correct_char, incorrect_char + 1)
+                        incorrect += 1
+                    try:
+                        result_dict[style][cs] += 1
+                    except:
+                        try:
+                            result_dict[style][cs] = 1
+                        except:
+                            result_dict[style] = {}
+                            result_dict[style][cs] = 1
+
+    print(correct)
+    print(incorrect)
+
+    print(result_dict)
+    print(character_dict)
