@@ -32,6 +32,8 @@ To use the network we just trained to predict the text in the unsegmented binari
 python3 main.py path/to/test/data
 ```
 
+Note: If you want to visualize intermediate results, use the option -v. The program has been known to crash sometimes, due to the use of threads. We have not fixed this problem as of yet.
+
 ## What is in the Code folder?
 1. `segmentation.py` handles the line and character segmentation of input test images.
 2. `preprocess.py` handles the cropping of the segmented characters. The characters are also centered in the resulting images.

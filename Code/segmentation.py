@@ -371,8 +371,8 @@ def segment_characters(line_segments, filename, args):
 
     for index, seg_arr in enumerate(line_segments):
         seg_arr = np.rot90(seg_arr)
-        seg_hist = create_histogram(seg_arr, smooth=51)
-        seg_minima = extract_local_minima(seg_hist, persistence_threshold=10)
+        seg_hist = create_histogram(seg_arr, smooth=31)
+        seg_minima = extract_local_minima(seg_hist, persistence_threshold=args.persistence_threshold)
 
         line_astar_paths = perform_astar_pathfinding(
             seg_arr, seg_minima, 
@@ -629,8 +629,8 @@ def segment_from_args(args, filename):
     segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args.visualize)
     char_astar_paths = segment_characters(segmented_lines, filename, args)
     segmented_characters = extract_char_images(char_astar_paths, segmented_lines, filename, args)
-    finer_segmented_chars = find_single_multi_char(segmented_characters, filename, args)
-    return finer_segmented_chars
+    # finer_segmented_chars = find_single_multi_char(segmented_characters, filename, args)
+    return segmented_characters
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Segmentation, this file should not be directly run.")
@@ -640,7 +640,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
     parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
     parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
-    parser.add_argument("-p", "--persistence_threshold", type=int, default=2, help="The persistence threshold for finding local extrema.")
+    parser.add_argument("-p", "--persistence_threshold", type=int, default=1, help="The persistence threshold for finding local extrema.")
     parser.add_argument("--n_black_pix_threshold", type=int, default=200, help="The minimum number of black pixels per character image.")
 
     args = parser.parse_args()
