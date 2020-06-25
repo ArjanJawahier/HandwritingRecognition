@@ -132,7 +132,7 @@ dmypy.json
 
 # This project
 journal.md
-# Networks/*
+Networks/network*
 results/*
 Train_Data/*
 Test_Data/*
