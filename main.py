@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument("-sd", "--save_dir", type=str, default="Networks", metavar="DIR", help="dirname where networks will be saved")
     
     # Test/segmentation options
-    parser.add_argument("--network_path", type=str, default="Networks/final_network_05_epochs_1000_6blocks.pt", help="The filepath of the network you want to test.")
+    parser.add_argument("--network_path", type=str, default="Networks/final_network_05_epochs_1000_6_blocks.pt", help="The filepath of the network you want to test.")
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
     parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
@@ -286,7 +286,7 @@ def main():
         }
 
         print("The test dataroot is expected to only contain binarized "
-              "images. Please check if this is the case")
+              "images. Please check if this is the case.")
 
         util.makedirs("results")
         clf = cc.CharacterClassifier(args).to(device)
