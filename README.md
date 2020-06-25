@@ -22,8 +22,9 @@ Run `python3 main.py -h` to see all possible (and required) arguments. Please ke
 ## Example uses
 To train a network on the training set, we could use the command:
 ```bash
-python3 main.py --train --train_dataroot path/to/train/data
+python3 main.py --train --train_dataroot path/to/train/data path/to/test/data
 ```  
+Sadly, the path/to/test/data is a required argument at the moment, due to the positional nature as laid out in the requirements.
 
 To use the network we just trained to predict the text in the unsegmented binarized images we could use the command:
 
