@@ -15,9 +15,9 @@ from multiprocessing import Process, Queue
 import time
 import cv2 as cv
 
-from Code.persistence.persistence1d import RunPersistence
-import Code.visualizer as vis
-import Code.util as util
+from persistence.persistence1d import RunPersistence
+import visualizer as vis
+import util as util
 
 
 def prepare_inverted_image(binarized_image, subsampling):
@@ -492,7 +492,7 @@ def find_single_multi_char(img_arr, filename, args):
                 min_y_arr.append(min_y)
 
             #first check is the width of all contours in the original segment
-            if max(max_x_arr) - min(min_x_arr) > 110:
+            if len(max_x_arr) != 0 and len(min_x_arr) !=0 and max(max_x_arr) - min(min_x_arr) > 110:
                 if len(contours[0]) != 0:
                     for k, cont in enumerate(contours): #go over the different blobs in the original segment
                         if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:

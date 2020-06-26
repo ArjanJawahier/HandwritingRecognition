@@ -11,7 +11,7 @@ import PIL.ImageDraw as ImageDraw
 import os
 import numpy as np
 
-import Code.util as util
+import util as util
 
 def plot_histogram(hist, fig_filepath, minima=None):
     """Plots the given array of counts of black pixels as a
