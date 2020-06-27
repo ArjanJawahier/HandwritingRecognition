@@ -8,12 +8,12 @@ pip3 install -r REQUIREMENTS.txt
 ```
 
 ## Data Augmentation
-Because not all the characters have equal amounts of data, we used imagemorph  to augment the data. To compile and build imagemorph, change directories to the `Code` directory and run use the following command: `make` (in Windows use something like MinGW)
+Because not all the characters have equal amounts of data and because there is not enough data, we used imagemorph to augment the already existing data. To compile and build imagemorph, change directories to the `Code` directory and run use the following command: `make` (in Windows use something like MinGW)
 Then, to run the imagemorph program, use the following command:
 ```bash
 ./run_imagemorph.sh
 ```
-This will ensure we have 300 examples for each class.
+This will ensure we have 1000 examples for each class.
 
 
 ## How to use train and test our network:
