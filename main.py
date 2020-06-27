@@ -185,7 +185,6 @@ def predict(args, network, data, device, labels):
     for char_img in data:
         char_img = resize(char_img, (args.image_size, args.image_size))
         char_img = char_img.reshape(1, 1, char_img.shape[0], char_img.shape[1])
-        char_img /= 255
         char_img = torch.Tensor(char_img)
         char_img = char_img.to(device)
         pred = network(char_img)

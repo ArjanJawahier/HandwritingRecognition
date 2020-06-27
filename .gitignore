@@ -139,3 +139,5 @@ Test_Data/*
 Figures/*
 Style_Data/*
 *imagemorph
+acc_curves*
+loss_curves*
