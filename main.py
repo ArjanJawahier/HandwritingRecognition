@@ -202,7 +202,7 @@ def argument_error(message):
 def main():
     args = parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    
+
     if args.train:
         train_dataloader, valid_dataloader, _ = create_dataloaders(args)
 
@@ -293,14 +293,18 @@ def main():
 
         util.makedirs("results")
         clf = cc.CharacterClassifier(args).to(device)
-        clf.load_state_dict(torch.load(args.network_path))
+        if device == torch.device("cuda:0"):
+            clf.load_state_dict(torch.load(args.network_path))
+        else:
+            clf.load_state_dict(torch.load(args.network_path, map_location=lambda storage, loc: storage))
         clf.eval()
 
         test_filenames = os.listdir(args.test_dataroot)
         for f_idx, filename in enumerate(test_filenames):
             name, ext = os.path.splitext(filename)
             if ext != ".jpg" and ext != ".jpeg":
-                argument_error(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+                print(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+                continue
 
             char_segments = segmentation.segment_from_args(args, filename)
             char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
