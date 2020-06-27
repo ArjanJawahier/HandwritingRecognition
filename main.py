@@ -293,7 +293,11 @@ def main():
 
         util.makedirs("results")
         clf = cc.CharacterClassifier(args).to(device)
-        clf.load_state_dict(torch.load(args.network_path))
+        if device == torch.device("cuda:0"):
+            clf.load_state_dict(torch.load(args.network_path))
+        else:
+            clf.load_state_dict(torch.load(args.network_path, map_location=lambda storage, loc: storage))
+
         clf.eval()
 
         test_filenames = os.listdir(args.test_dataroot)
