@@ -15,9 +15,9 @@ from multiprocessing import Process, Queue
 import time
 import cv2 as cv
 
-from Code.persistence.persistence1d import RunPersistence
-import Code.visualizer as vis
-import Code.util as util
+from persistence.persistence1d import RunPersistence
+import visualizer as vis
+import util as util
 
 
 def prepare_inverted_image(binarized_image, subsampling):
@@ -452,77 +452,15 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
         l_idx += 1
     return char_segments
 
-
 def find_single_multi_char(img_arr, filename, args):
-    #if the contour is too wide add the image_arr to re_analize_arr
-
-    # Correction: We need a 2d output array, one array for each line in the image
-    output_arr = []
-    for index, arr in enumerate(img_arr):
-        # Question: Why is this a here? It is not used in the remainder of the code
-        a = Image.fromarray(arr)
-
-        inv_img = np.invert(arr)
-        contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
-        max_y_arr = []
-        min_y_arr = []
-        max_x_arr = []
-        min_x_arr = []
-        min_x = np.inf
-        max_x = 0
-        min_y = np.inf
-        max_y = 0
-        for k, cont in enumerate(contours):
-            min_x = np.inf
-            max_x = 0
-            min_y = np.inf
-            max_y = 0
-            for i, pixel in enumerate(cont): #find the length of all the contours in the image
-                if pixel[0][0] < min_x:
-                  min_x = pixel[0][0]
-                if pixel[0][0] > max_x:
-                   max_x = pixel[0][0]
-                if pixel[0][1] < min_y:
-                   min_y = pixel[0][1]
-                if pixel[0][1] > max_y:
-                    max_y = pixel[0][1]
-            max_x_arr.append(max_x)
-            min_x_arr.append(min_x)
-            max_y_arr.append(max_y)
-            min_y_arr.append(min_y)
-        if (max(max_x_arr) - min(min_x_arr)) > 110: #first check is the width of all contours in the original segment
-            if len(contours[0] != 0): #if there are multiple blobs
-                for k, cont in enumerate(contours): #go over the different blobs in the original segment
-                    if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
-                        matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
-                        c = np.asarray(matrix)
-                        cv.drawContours(c, contours, k, (0,0,0), -1)
-                        # cc = Image.fromarray(c)
-                        # fig = plt.figure(figsize=(5,5))
-                        # fig.add_subplot(1,2,1)
-                        # plt.imshow(a)
-                        # fig.add_subplot(1,2,2)
-                        # plt.imshow(cc)
-                        # plt.show()
-                        if np.amin(c) > 0: 
-                            output_arr.append(c)
-        else:
-            output_arr.append(arr)
-        max_y_arr = []
-        min_y_arr = []
-        max_x_arr = []
-        min_x_arr = []        
-    
-    return output_arr
-
-def find_single_multi_char_does_not_crash_but_results_are_also_wrong(img_arr, filename, args):
-    # Correction: We need a 2d output array, one array for each line in the image
     output_arr = [[] for _ in img_arr]
     for idx, line in enumerate(img_arr):
         for l_idx, char_seg in enumerate(line):
-            arr = np.array(char_seg, dtype=np.uint8)
-
-            inv_img = np.invert(arr)
+            arr = np.array(char_seg, dtype=np.uint8) #apply dilation and erosion to improve image
+            kernel = np.ones((3,3),np.uint8)
+            dilation = cv.dilate(arr,kernel,iterations = 3)
+            erode = cv.erode(dilation,kernel,iterations = 2)
+            inv_img = np.invert(erode)
             contours, h = cv.findContours(inv_img, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
             max_y_arr = []
             min_y_arr = []
@@ -553,21 +491,34 @@ def find_single_multi_char_does_not_crash_but_results_are_also_wrong(img_arr, fi
                 min_y_arr.append(min_y)
 
             #first check is the width of all contours in the original segment
-            if max(max_x_arr) - min(min_x_arr) > 110:
+            if len(max_x_arr) != 0 and len(min_x_arr) !=0 and max(max_x_arr) - min(min_x_arr) > 110: 
                 if len(contours[0]) != 0:
                     for k, cont in enumerate(contours): #go over the different blobs in the original segment
                         if max_x_arr[k]-min_x_arr[k] != 0 and max_y_arr[k]-min_y_arr[k] != 0 and len(cont) > 110:
-                            matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+300)] for y in range(max_y_arr[k]-min_y_arr[k]+300)] 
+                            matrix = [[255 for x in range(max_x_arr[k]-min_x_arr[k]+2000)] for y in range(max_y_arr[k]-min_y_arr[k]+2000)] 
                             c = np.array(matrix, dtype=np.uint16)
                             c_UMat = cv.UMat(c)
-                            cv.drawContours(c_UMat, contours, k, 0, -1)
+                            cv.drawContours(c_UMat, contours, k, (0,0,0), -1)
                             c = cv.UMat.get(c_UMat)
+                            c_inv = np.absolute(c/255 -1)
+                            # c = np.asarray(matrix)
+                            # cv.drawContours(c, contours, k, (0,0,0), -1)
+                            #uncomment for comparing the new segment with the complete segment
+                            # cc = Image.fromarray(c)
+                            # fig = plt.figure(figsize=(5,5))
+                            # fig.add_subplot(1,2,1)
+                            # a = Image.fromarray(erode)
+                            # plt.imshow(a)
+                            # fig.add_subplot(1,2,2)
+                            # plt.imshow(cc)
+                            # plt.show()
                             if np.sum(c_inv) > args.n_black_pix_threshold: 
                                 output_arr[idx].append(c)
                                 if args.visualize:
-                                    util.makedirs([
-                                        f"Figures/split_char_images/{filename}"
-                                    ])
+                                    if idx == 0:
+                                        util.makedirs([
+                                            f"Figures/split_char_images/{filename}"
+                                        ])
                                     c_im = Image.fromarray(c).convert("L")
                                     save_loc = f"Figures/split_char_images/{filename}/split_char_image_{idx}_{l_idx}_{k}.png"
                                     c_im.save(save_loc, "PNG")
@@ -578,11 +529,10 @@ def find_single_multi_char_does_not_crash_but_results_are_also_wrong(img_arr, fi
                     util.makedirs([
                         f"Figures/split_char_images/{filename}"
                     ])
-                    c_im = Image.fromarray(arr).convert("L")
+                    c_im = Image.fromarray(erode).convert("L")
                     save_loc = f"Figures/split_char_images/{filename}/split_char_image_{idx}_{l_idx}.png"
                     c_im.save(save_loc, "PNG")
                     print(f"Saved image to {save_loc}")
-
     return output_arr
 
 def segment_from_args(args, filename):
@@ -629,8 +579,8 @@ def segment_from_args(args, filename):
     segmented_lines = extract_line_images(image_arr, astar_paths, n_cols, filename, args.visualize)
     char_astar_paths = segment_characters(segmented_lines, filename, args)
     segmented_characters = extract_char_images(char_astar_paths, segmented_lines, filename, args)
-    # finer_segmented_chars = find_single_multi_char(segmented_characters, filename, args)
-    return segmented_characters
+    finer_segmented_chars = find_single_multi_char(segmented_characters, filename, args)
+    return finer_segmented_chars
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Segmentation, this file should not be directly run.")
@@ -640,7 +590,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
     parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
     parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
-    parser.add_argument("-p", "--persistence_threshold", type=int, default=1, help="The persistence threshold for finding local extrema.")
+    parser.add_argument("-p", "--persistence_threshold", type=int, default=20, help="The persistence threshold for finding local extrema.")
     parser.add_argument("--n_black_pix_threshold", type=int, default=200, help="The minimum number of black pixels per character image.")
 
     args = parser.parse_args()
