@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import Code.util as util
 import Code.characterclassifier as cc
 import Code.segmentation as segmentation
+import Code.edge_hinge as edge_hinge
 import Code.preprocess as preprocess
 
 def parse_args():
@@ -182,6 +183,7 @@ def test(args, network, test_data, nll_loss, device):
 
 def predict(args, network, data, device, labels):
     returned_characters = []
+    returned_labels = []
     for char_img in data:
         char_img = resize(char_img, (args.image_size, args.image_size))
         char_img = char_img.reshape(1, 1, char_img.shape[0], char_img.shape[1])
@@ -192,12 +194,26 @@ def predict(args, network, data, device, labels):
         for key, value in labels.items():
             if value == pred:
                 returned_characters.append(key)
+                returned_labels.append(value)
                 break
-    return returned_characters
+    return_array = np.array([returned_characters,returned_labels])
+    return return_array
 
 def argument_error(message):
     print("ERROR: " + message)
     exit(-1)
+
+def most_frequent(List): 
+    counter = 0
+    num = List[0] 
+      
+    for i in List: 
+        curr_frequency = List.count(i) 
+        if(curr_frequency> counter): 
+            counter = curr_frequency 
+            num = i 
+  
+    return num 
 
 def main():
     args = parse_args()
@@ -288,6 +304,8 @@ def main():
             '\u05D9': 25, '\u05D6': 26
         }
 
+        style_classifier = edge_hinge.StyleClassifier("../Style_Data/")
+
         print("The test dataroot is expected to only contain binarized "
               "images. Please check if this is the case.")
 
@@ -310,16 +328,33 @@ def main():
             char_segments = segmentation.segment_from_args(args, filename)
             char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
             pred_lines = []
+            pred_styles = []
             for line in char_segments:
                 # Do we use Class or Unicode labels?
                 pred = predict(args, clf, line, device, unicode_labels)
-                if len(pred) > 0:
-                    pred = " ".join(list(reversed(pred))) + "\n"
-                    pred_lines.append(pred)
+                pred_uni = pred[0]
+                pred_lab = pred[1]
+                if len(pred_uni) > 0:
+                    pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
+                    pred_lines.append(pred_uni)
+                    for key, char in enumerate(line):
+                        labelled_character = "none"
+                        for key2, value in class_labels.items():
+                            if int(value) == int(pred_lab[key]):
+                                labelled_character = key2
+                        style = style_classifier.predict_style(Image.fromarray(char*255), labelled_character)
+                        pred_styles.append(style)
 
             with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
                 outfile.writelines(pred_lines)
                 print(f"Written output to results/{name}_characters.txt")
+
+            print("=========")
+            print(pred_styles)
+            print("=========")
+            with open(f"results/{name}_style.txt", "w", encoding="utf-8") as outfile:
+                outfile.writelines(most_frequent(pred_styles))
+                print(f"classified style: ", most_frequent(pred_styles), "\n")
 
 if __name__ == "__main__":
     main()

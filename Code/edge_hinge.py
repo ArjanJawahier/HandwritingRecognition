@@ -10,20 +10,16 @@ import numpy as np
 import os
 import torch
 import math
-import util
 import _pickle as pickle
 
 
 class StyleClassifier:
 
-    def __init__(self, train_data="../Style_Data/", use_dict="style_data.pkl"):
+    def __init__(self, train_data="../Style_Data/", use_dict="Code/style_data.pkl"):
         
         if len(use_dict) == 0:
             self.train_data = train_data
             self.average_styles = self.make_average_styles()
-
-            # with open('style_data.txt', 'w') as f:
-            #     print(self.average_styles, file=f)
 
             dict_file = open("style_data.pkl", "wb")
             pickle.dump(self.average_styles, dict_file)
@@ -55,7 +51,7 @@ class StyleClassifier:
                         average_styles[character][style] = average
         return average_styles
 
-    def predict_style(self, img):
+    def predict_style(self, img, character):
         eh = self.edge_hinge(img)
         min_dist = 99999
         for key, value in self.average_styles[character].items():
@@ -94,7 +90,6 @@ class StyleClassifier:
 
         return eh
 
-
 if __name__ == "__main__":
     classifier = StyleClassifier("../Style_Data/")
     correct = 0
@@ -107,7 +102,7 @@ if __name__ == "__main__":
                 if file.endswith(".jpg") and ("_00" in file):
                     img = Image.open(os.path.join(
                         "../Style_Data/" + style + "/" + character + "/", file))
-                    cs = classifier.predict_style(img)
+                    cs = classifier.predict_style(img, character)
                     try:
                         correct_char, incorrect_char = character_dict[character]
                     except:
