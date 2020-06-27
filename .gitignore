@@ -7,6 +7,9 @@ __pycache__/
 *.o
 *.so
 
+# created pdf's
+*.pdf
+
 # Distribution / packaging
 .Python
 build/
