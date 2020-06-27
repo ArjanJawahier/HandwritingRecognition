@@ -15,9 +15,9 @@ from multiprocessing import Process, Queue
 import time
 import cv2 as cv
 
-from persistence.persistence1d import RunPersistence
-import visualizer as vis
-import util as util
+from Code.persistence.persistence1d import RunPersistence
+import Code.visualizer as vis
+import Code.util as util
 
 
 def prepare_inverted_image(binarized_image, subsampling):
