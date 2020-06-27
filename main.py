@@ -312,14 +312,12 @@ def main():
             pred_lines = []
             for line in char_segments:
                 # Do we use Class or Unicode labels?
-                print("trying to predict")
                 pred = predict(args, clf, line, device, unicode_labels)
                 if len(pred) > 0:
                     pred = " ".join(list(reversed(pred))) + "\n"
                     pred_lines.append(pred)
 
             with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
-                print("trying to write")
                 outfile.writelines(pred_lines)
                 print(f"Written output to results/{name}_characters.txt")
 
