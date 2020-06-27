@@ -185,7 +185,6 @@ def predict(args, network, data, device, labels):
     for char_img in data:
         char_img = resize(char_img, (args.image_size, args.image_size))
         char_img = char_img.reshape(1, 1, char_img.shape[0], char_img.shape[1])
-        char_img /= 255
         char_img = torch.Tensor(char_img)
         char_img = char_img.to(device)
         pred = network(char_img)
@@ -203,7 +202,7 @@ def argument_error(message):
 def main():
     args = parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    
     if args.train:
         train_dataloader, valid_dataloader, _ = create_dataloaders(args)
 
@@ -248,7 +247,11 @@ def main():
             )
 
         clf = cc.CharacterClassifier(args).to(device)
-        clf.load_state_dict(torch.load(args.network_path))
+        if device == torch.device("cuda:0"):
+            clf.load_state_dict(torch.load(args.network_path))
+        else:
+            clf.load_state_dict(torch.load(args.network_path, map_location=lambda storage, loc: storage))
+
         clf.eval()
         nll_loss = torch.nn.NLLLoss().to(device)
         test_acc, test_loss = test(args, clf, test_dataloader, nll_loss, device)
@@ -290,7 +293,11 @@ def main():
 
         util.makedirs("results")
         clf = cc.CharacterClassifier(args).to(device)
-        clf.load_state_dict(torch.load(args.network_path))
+        if device == torch.device("cuda:0"):
+            clf.load_state_dict(torch.load(args.network_path))
+        else:
+            clf.load_state_dict(torch.load(args.network_path, map_location=lambda storage, loc: storage))
+
         clf.eval()
 
         test_filenames = os.listdir(args.test_dataroot)
