@@ -40,7 +40,7 @@ def find_best_rotation(image, filename, args):
             min_avg = avg_of_local_minima
             best_rot = rotation
             best_minima_indices = minima_indices
-    print(f"Best rotation: {best_rot}")
+    print(f"Best rotation: {best_rot}\n")
     return best_rot, best_minima_indices
 
 def rotate_invert_image(image, rotation):
@@ -101,6 +101,7 @@ def create_histogram(image_array, smooth=15):
     return smooth_hist
 
 def extract_local_minima(histogram, persistence_threshold=10):
+
     """Extracts local minima from the histogram based on the persistence1d 
     method. This was also done in the A* paper.
     """
@@ -143,6 +144,7 @@ class Node:
         return f"(pos: {self.position}, f: {self.f})"
 
 def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampling):
+
     arr = image_array / 255
     astar_paths = []
 
@@ -171,6 +173,7 @@ def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampli
     return astar_paths
 
 def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsampling):
+
     # The start node starts with H(n) = width of image
     # The start node start with F(n) = G'(n) + H(n)
     start_node = Node(parent=None, position=np.array([line_num, 0]))
