@@ -354,7 +354,7 @@ def main():
             '\u05D9': 25, '\u05D6': 26
         }
 
-        style_classifier = edge_hinge.StyleClassifier("Style_Data/")
+        style_classifier = edge_hinge.StyleClassifier(use_dict="style_data.pkl")
 
         print("The test dataroot is expected to only contain binarized "
               "images. Please check if this is the case.")
@@ -375,13 +375,10 @@ def main():
                 print(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
                 continue
 
-            char_segments_unprocessed = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments_unprocessed, args, filename)
+            char_segments = segmentation.segment_from_args(args, filename)
+            char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
             pred_lines = []
-            pred_styles_nonchar = {"Hasmonean":0, "Archaic":0, "Herodian":0}
             pred_styles = {"Hasmonean":0, "Archaic":0, "Herodian":0}
-            style_distances_count = {"Hasmonean":(0,0), "Archaic":(0,0), "Herodian":(0,0)}
-            style_distances_count_nonchar = {"Hasmonean":(0,0), "Archaic":(0,0), "Herodian":(0,0)}
             for line_num, line in enumerate(char_segments):
                 pred = predict(args, clf, line, device, unicode_labels)
                 pred_uni, pred_lab = pred
@@ -389,56 +386,28 @@ def main():
                     pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
                     pred_lines.append(pred_uni)
                     for char_key, char in enumerate(line):
-                        labelled_character = "none"
+                        labeled_char = "none"
                         for key2, value in class_labels.items():
                             if int(value) == int(pred_lab[char_key]):
-                                labelled_character = key2
-                        np.set_printoptions(threshold=sys.maxsize)
-                        # print(char//255)
+                                labeled_char = key2
+
                         style_img = Image.fromarray(char//255)
                         hinge = style_classifier.edge_hinge(style_img)
-                        style = style_classifier.predict_style(hinge, labelled_character)
-                        style_nonchar = style_classifier.predict_style_nonchar(hinge)
-                        style_distances = style_classifier.get_distance(hinge, labelled_character)
-                        style_distances_nonchar = style_classifier.get_distance_nonchar(hinge)
+                        style = style_classifier.predict_style(hinge, labeled_char)
                         pred_styles[style] += 1
-                        pred_styles_nonchar[style_nonchar] += 1
-                        for dist_key, dist in style_distances.items():
-                            current_count, current_dist = style_distances_count[dist_key]
-                            style_distances_count[dist_key] = (current_count+1, current_dist+dist)
-                        for dist_key, dist in style_distances_nonchar.items():
-                            current_count, current_dist = style_distances_count_nonchar[dist_key]
-                            style_distances_count_nonchar[dist_key] = (current_count+1, current_dist+dist)
 
 
             with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
                 outfile.writelines(pred_lines)
                 print(f"Written output to results/{name}_characters.txt")
 
-            pred_style_distances =  {"Hasmonean":0, "Archaic":0, "Herodian":0}
-            pred_style_distances_nonchar =  {"Hasmonean":0, "Archaic":0, "Herodian":0}
-            for key, value in style_distances_count.items():
-                count, dist = value
-                pred_style_distances[key] = dist/count
-            for key, value in style_distances_count_nonchar.items():
-                count, dist = value
-                pred_style_distances_nonchar[key] = dist/count
-
             print("=========")
             print(pred_styles)
             print("=========")
-            print(pred_style_distances)
-            print("=== NON CHAR ===")
-            print(pred_styles_nonchar)
-            print("=========")
-            print(pred_style_distances_nonchar)
-            print("=========")
+
             with open(f"results/{name}_style.txt", "w", encoding="utf-8") as outfile:
                 outfile.writelines(max(pred_styles, key=pred_styles.get))
                 print(f"classified style: ", max(pred_styles, key=pred_styles.get), "\n")
-                print(f"classified style dist: ", min(pred_style_distances, key=pred_style_distances.get), "\n")
-                print(f"classified style non char: ", max(pred_styles_nonchar, key=pred_styles.get), "\n")
-                print(f"classified style dist: ", min(pred_style_distances_nonchar, key=pred_style_distances_nonchar.get), "\n")
 
 if __name__ == "__main__":
     main()
