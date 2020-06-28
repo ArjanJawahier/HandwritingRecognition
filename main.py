@@ -1,6 +1,12 @@
 """main.py
-This will be the file that serves as a starting point.
-usage: python main.py [-h]
+This is the file that serves as a starting point of the entire pipeline.
+Usage:
+To show help:
+python3 main.py -h
+To train a network:
+python3 main.py --train --train_dataroot path/to/train/data path/to/test/data
+To use a network to predict test images:
+python3 main.py path/to/test/data
 """
 
 import sys
@@ -88,8 +94,6 @@ def create_dataloaders(args):
                               stratify=dataset.targets
                           )
 
-    # MIGHTDO: Equalize validation and test sets 
-    # validation set is 15% of the train set now, whereas the test set is 15% of the whole dataset
     train_idx, valid_idx = train_test_split(
                               train_idx,
                               test_size=0.15
@@ -123,15 +127,15 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
         # Get the data in batches
         batch_index = 0
         for data, targets in train_data:
-            # We perform our custom preprocessing
             print(f"Batch {batch_index}/{len(train_data.dataset)/len(data)}", end="\r")
             data = data.numpy()
+            # We perform our custom preprocessing
             data = preprocess.arrs_to_tensor(data, args)
             data = data.to(device)
             targets = targets.to(device)
             optimizer.zero_grad()
             predictions = network(data)
-            # Compute negative log-likelihood loss (needs LogSoftmax as last layer in the network)
+            # NLL loss needs LogSoftmax as last layer in the network
             loss = nll_loss(predictions, targets)
             loss.backward()
             optimizer.step()
@@ -311,7 +315,6 @@ def main():
             char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
             pred_lines = []
             for line in char_segments:
-                # Do we use Class or Unicode labels?
                 pred = predict(args, clf, line, device, unicode_labels)
                 if len(pred) > 0:
                     pred = " ".join(list(reversed(pred))) + "\n"
