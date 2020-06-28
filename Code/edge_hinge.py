@@ -68,9 +68,9 @@ class StyleClassifier:
 
     def predict_style(self, eh, character):
         # eh = self.edge_hinge(img)
-        min_dist = 99999
+        min_dist = np.inf
         for key, value in self.average_styles[character].items():
-            dist = np.linalg.norm(eh - value)
+            dist = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)]) 
             if dist < min_dist:
                 closest_style = key
                 min_dist = dist
@@ -80,9 +80,10 @@ class StyleClassifier:
 
     def predict_style_nonchar(self, eh):
         # eh = self.edge_hinge(img)
-        min_dist = 99999
+        min_dist = np.inf
         for key, value in self.average_styles_nonchar.items():
-            dist = np.linalg.norm(eh - value)
+            # dist = np.linalg.norm(eh - value)
+            dist = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)]) 
             if dist < min_dist:
                 closest_style = key
                 min_dist = dist
@@ -95,14 +96,15 @@ class StyleClassifier:
         # eh = self.edge_hinge(img)
         distances = {}
         for key, value in self.average_styles[character].items():
-            distances[key] = np.linalg.norm(eh - value)
+            distances[key] = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)])
+            # distances[key] = np.linalg.norm(eh - value)
         return distances
 
     def get_distance_nonchar(self, eh):
         # eh = self.edge_hinge(img)
         distances = {}
         for key, value in self.average_styles_nonchar.items():
-            distances[key] = np.linalg.norm(eh - value)
+            distances[key] = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)])
         return distances
 
     def edge_hinge(self, img):
