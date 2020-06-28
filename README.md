@@ -32,6 +32,8 @@ To use the network we just trained to predict the text in the unsegmented binari
 python3 main.py path/to/test/data
 ```
 
+The above command will also perform style classification on the binarized images.  
+
 Note: If you want to visualize intermediate results, use the option -v. The program has been known to crash sometimes, due to the use of threads. We have not fixed this problem as of yet.
 
 ## What is in the Code folder?
@@ -39,4 +41,5 @@ Note: If you want to visualize intermediate results, use the option -v. The prog
 2. `preprocess.py` handles the cropping of the segmented characters. The characters are also centered in the resulting images.
 3. `visualizer.py` handles intermediate results visualization (such as the images we use for debugging and presentations).
 4. `characterclassifier.py` contains the code for our neural network. We are using a ResNet architecture.
-5. `imagemorph.c` and `run_imagemorph.sh` handle the data augmentation, imagemorph.c has been edited slightly to allow for PGM inputs instead of PPM. 
+5. `edge_hinge.py` is all about the Edge Hinge feature. Edge Hinge features of test data are compared with the averaged Style-Training data Edge Hinge features, which is stored in the file `style_data.pkl` in the root directory.
+6. `imagemorph.c` and `run_imagemorph.sh` handle the data augmentation, imagemorph.c has been edited slightly to allow for PGM inputs instead of PPM. 
