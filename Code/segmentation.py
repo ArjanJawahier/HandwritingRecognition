@@ -40,7 +40,7 @@ def find_best_rotation(image, filename, args):
             min_avg = avg_of_local_minima
             best_rot = rotation
             best_minima_indices = minima_indices
-    print(f"Best rotation: {best_rot}\n")
+    print(f"Best rotation: {best_rot}")
     return best_rot, best_minima_indices
 
 def rotate_invert_image(image, rotation):
