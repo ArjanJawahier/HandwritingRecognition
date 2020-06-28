@@ -24,6 +24,7 @@ class StyleClassifier:
             dict_file = open("style_data.pkl", "wb")
             pickle.dump(self.average_styles, dict_file)
             dict_file.close()
+            print("Created new dict file in Code/style_data.pkl")
 
         else:
             dict_file = open(use_dict, "rb")
@@ -74,22 +75,22 @@ class StyleClassifier:
     def edge_hinge(self, img):
         frag_length = 5
         width, height = img.size
-        eh = np.zeros(((frag_length - 1) * 8, (frag_length - 1) * 8))
+        eh = np.zeros(((frag_length) * 8 + 1, (frag_length) * 8 + 1))
         pic = np.array(img)
         for x in range(frag_length, width - frag_length):
             for y in range(frag_length, height - frag_length):
                 count = 1
                 found = False
                 init = 1
-                for z_1 in range(-frag_length, frag_length):
-                    for z_2 in range(-frag_length, frag_length):
+                for z_1 in range(-frag_length, frag_length + 1):
+                    for z_2 in range(-frag_length, frag_length + 1):
                         if (z_1 == -frag_length or z_1 == frag_length or z_2 == -frag_length or z_2 == frag_length):
                             if not found:
-                                if pic[y + z_2, x + z_1] == 1:
+                                if pic[y + z_2, x + z_1] == 0:
                                     found = True
                                     init = count
                             else:
-                                if pic[y + z_2, x + z_1] == 1:
+                                if pic[y + z_2, x + z_1] == 0:
                                     found = True
                                     eh[init, count] += 1
                             count += 1
