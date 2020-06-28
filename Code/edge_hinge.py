@@ -59,9 +59,17 @@ class StyleClassifier:
             if dist < min_dist:
                 closest_style = key
                 min_dist = dist
-        # If style is "" then there is no average style for this character
+        # If None there is no average style for this character
         assert closest_style != None
         return closest_style
+
+
+    def get_distance(self, img, character):
+        eh = self.edge_hinge(img)
+        distances = {}
+        for key, value in self.average_styles[character].items():
+            distances[key] = np.linalg.norm(eh - value)
+        return distances
 
     def edge_hinge(self, img):
         frag_length = 5
