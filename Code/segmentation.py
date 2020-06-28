@@ -20,22 +20,47 @@ import Code.visualizer as vis
 import Code.util as util
 
 
-def prepare_inverted_image(binarized_image, subsampling):
-    # Open the image and invert it
-    # We want to invert it for easier histogram-making     
-    resized_image = binarized_image.resize((binarized_image.width//subsampling, binarized_image.height//subsampling))
+def prepare_inverted_image(img, subsampling):
+    """Resize and invert an input image. It is inverted for the purposes of 
+    being able to sum the number of black pixels in the image.
+
+    inputs:
+    img -- The input image, which will be resized and inverted.
+
+    outputs:
+    inverted_image -- The resized and inverted image.
+    """
+    resized_image = img.resize((img.width//subsampling, img.height//subsampling))
     inverted_image = ImageOps.invert(resized_image)
     return inverted_image
 
 def find_best_rotation(image, filename, args):
-    """Find out what the minimal average number of black pixels (or white pixels in inverted images)
-    is per row, for various rotated versions of the input test image
-    MIGHTDO: Streamline this (Hough transform?)
+    """Find out what the minimal average number of black pixels (or white 
+    pixels in inverted images) is per row, for various rotated versions of
+    the input test image.
+
+    inputs:
+    image     -- The input image (test image).
+    filename  -- The filename of the input test image, this is used for saving
+                 figures that have to do with this image.
+    args      -- The arguments to the program, mostly defaults.
+
+    outputs:
+    best_rot  -- The best rotation, based on the average number of black pixels
+                 in the minima of the rotated image (degrees).
+    best_minima_indices -- The row indices of the minima (spaces between text)
+                           in the best rotated image.    
     """
     min_avg = np.inf
     for rotation in range(-6, 6, 1):
         rotated_image = image.rotate(rotation)
-        minima_indices, avg_of_local_minima = line_segment(rotated_image, rotation, args.visualize, args.persistence_threshold, filename)
+        minima_indices, avg_of_local_minima = extract_local_minima(
+                                                  rotated_image,
+                                                  rotation,
+                                                  args.visualize,
+                                                  args.persistence_threshold,
+                                                  filename
+                                              )
         if avg_of_local_minima < min_avg:
             min_avg = avg_of_local_minima
             best_rot = rotation
@@ -54,37 +79,66 @@ def rotate_invert_image(image, rotation):
     inverted_rotated_image = ImageOps.invert(rotated_image)
     return inverted_rotated_image
 
-def line_segment(image, rotation, visualize, persistence_threshold, filename):
-    """This function segments the binarized image
-    into horizontal lines of text, using the A*
-    algorithm outlined in:
+def extract_local_minima(image, rot, visualize, persistence_threshold, filename):
+    """This function segments the binarized image into horizontal lines of 
+    text, using the A* algorithm outlined in:
     https://www.ai.rug.nl/~mwiering/GROUP/ARTICLES/LineSegmentation.pdf
     This function also uses the persistence1d module, downloaded from:
     https://www.csc.kth.se/~weinkauf/notes/persistence1d.html
+
+    inputs:
+    image     -- The image which we want to segment into lines.
+    rot       -- The number of degrees the image was rotated. Useful for saving
+                 visualized figures under a comprehensive name.
+    visualize -- Whether to save figures based on this process.
+    persistence_threshold -- The persistence threshold determines which minima
+                             we are interested in. A very low threshold would
+                             result in extracting all local minima, whereas a
+                             very high threshold would result in only taking
+                             very defined local minima.
+    filename  -- The filename of the original input image, for saving figures.
     """
 
     # Create histogram
     image_array = np.array(image)
     histogram = create_histogram(image_array)
-    sorted_minima = extract_local_minima(histogram, persistence_threshold=persistence_threshold)
+    sorted_minima = histogram_to_minima(
+                        histogram,
+                        persistence_threshold=persistence_threshold
+                    )
     if visualize:
         util.makedirs(f"Figures/line_histograms/{filename}")
-        vis.plot_histogram(histogram, f"Figures/line_histograms/{filename}/smoothed_histogram_{rotation}")
-        vis.plot_histogram(histogram, f"Figures/line_histograms/{filename}/smoothed_histogram_with_extrema_{rotation}", minima=sorted_minima)
+        vis.plot_histogram(
+            histogram,
+            f"Figures/line_histograms/{filename}/smoothed_histogram_{rot}"
+        )
+        vis.plot_histogram(
+            histogram,
+            f"Figures/line_histograms/{filename}/smoothed_histogram_with_extrema_{rot}",
+            minima=sorted_minima
+        )
 
 
     # Some orientation might have different numbers of minima
     # To see how good the minima are, we average them.
-    # We will work with the image orientation that has the lowest average of local minima
+    # We work with the orientation that has the lowest average of local minima
     # Since it is expected that the text lines are horizontal in that case.
     avg_of_local_minima = sum(histogram[sorted_minima])/len(sorted_minima)
     return sorted_minima, avg_of_local_minima
 
 
 def create_histogram(image_array, smooth=15):
-    """This function takes a binarized image,
-    normalizes it and returns a 
-    histogram of black pixels per row.
+    """This function takes a binarized image, normalizes it and returns a 
+    histogram of black pixels for each row.
+
+    inputs:
+    image_array -- The numpy array representing the image.
+    smooth      -- A factor determining the strength of the savgol filter.
+                   The higher this number, the more the histogram is smoothed.
+
+    outputs:
+    smooth_hist -- A smoothed histogram, based on the number of black pixels
+                   per row in the input image.
     """
     arr = image_array / 255
     if arr[0, 0] == 1:
@@ -100,20 +154,32 @@ def create_histogram(image_array, smooth=15):
 
     return smooth_hist
 
-def extract_local_minima(histogram, persistence_threshold=10):
-
+def histogram_to_minima(histogram, persistence_threshold=10):
     """Extracts local minima from the histogram based on the persistence1d 
     method. This was also done in the A* paper.
+
+    inputs:
+    histogram     -- The histogram from which we want to extract the minima.
+                     For each row in the original input image, there is a value
+                     of number of black pixels in this histogram.
+    persistence_threshold -- The persistence threshold determines which minima
+                             we are interested in. A very low threshold would
+                             result in extracting all local minima, whereas a
+                             very high threshold would result in only taking
+                             very defined local minima.
+
+    outputs:
+    sorted_minima -- A sequence of the indices of the local minima.
     """
 
     # Use persistence to find out local minima
-    extrema_with_persistence = RunPersistence(histogram)
+    extrema = RunPersistence(histogram)
 
     # Only take extrema with persistence > threshold
-    filtered_extrema = [t[0] for t in extrema_with_persistence if t[1] > persistence_threshold]
+    filtered = [t[0] for t in extrema if t[1] > persistence_threshold]
 
     # Sort the extrema, results == [min, max, min, max, min, max, etc..]
-    sorted_extrema = sorted(filtered_extrema)
+    sorted_extrema = sorted(filtered)
 
     # Take every other entry, because we are only interested in local minima
     sorted_minima = sorted_extrema[::2]
@@ -121,7 +187,7 @@ def extract_local_minima(histogram, persistence_threshold=10):
 
 
 class Node:
-    """A node class for A* Pathfinding"""
+    """A node class for A* Pathfinding."""
 
     def __init__(self, parent=None, position=None):
         self.parent = parent
@@ -144,7 +210,22 @@ class Node:
         return f"(pos: {self.position}, f: {self.f})"
 
 def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampling):
+    """This function calls the astar function in a parallel manner, using
+    the multiprocessing library. The A* algorithm is based on the details
+    outlined in
+    https://www.ai.rug.nl/~mwiering/GROUP/ARTICLES/LineSegmentation.pdf
 
+    inputs:
+    image_array -- The image array which we want to segment into lines.
+    minima_rowindices -- The row indices of local minima (black pixels) in
+                         the image. There will be exactly as many A* paths as
+                         there are minima_rowindices.
+    const_c -- A constant value which is used for the A* algorithm. See
+               the paper for more details.
+
+    outputs:
+    astar_paths -- A sequence of A* paths, one for each local minimum.
+    """
     arr = image_array / 255
     astar_paths = []
 
@@ -155,7 +236,11 @@ def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampli
     for index, row in enumerate(minima_rowindices[1:-1]):
         border_top = minima_rowindices[index]
         border_bot = minima_rowindices[index+2]
-        p = multiprocessing.Process(target=astar, args=(arr, row, border_top, border_bot, return_dict, const_c, subsampling))
+        p = multiprocessing.Process(
+                target=astar,
+                args=(arr, row, border_top, border_bot,
+                      return_dict, const_c, subsampling)
+            )
         jobs.append(p)
         p.start()
 
@@ -173,7 +258,28 @@ def perform_astar_pathfinding(image_array, minima_rowindices, const_c, subsampli
     return astar_paths
 
 def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsampling):
+    """This function performs A* pathfinding to find a path between lines of 
+    text. The code is largely based on 
+    https://www.ai.rug.nl/~mwiering/GROUP/ARTICLES/LineSegmentation.pdf, but
+    some changes were made.
 
+    inputs:
+    img_arr  -- The input image in which we perform the A* pathfinding.
+    line_num -- The line where a local minimum was found. The start and end
+                nodes of the A* algorithm have this number as vertical
+                coordinate.
+    border_top -- A number which says that the A* agent cannot cross this line.
+    border_bot -- A number which says that the A* agent cannot cross this line.
+    return_dict -- A sequence of A* paths. Each line_num gets an own entry.
+                   This return_dict will also be returned, so each time this
+                   function is called, the return_dict will grow in size.
+    const_c -- A constant value which is used for the A* algorithm. See
+               the paper for more details.
+
+    outputs:
+    return_dict -- A sequence of A* paths. Each line_num gets their own
+                   A* path. A path should always be found for each line_num.
+    """
     # The start node starts with H(n) = width of image
     # The start node start with F(n) = G'(n) + H(n)
     start_node = Node(parent=None, position=np.array([line_num, 0]))
@@ -189,7 +295,8 @@ def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsa
         # First item in queue gets expanded first
         current_node = heappop(priority_queue)
         top_options = {}
-        while (current_node in expanded_nodes):  # If already checked (with higher priority) then take new one
+        # If already checked (with higher priority) then take new one
+        while (current_node in expanded_nodes):  
             current_node = heappop(priority_queue)
         expanded_nodes.add(current_node)
 
@@ -223,7 +330,24 @@ def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsa
                 
 
 def get_neighbours(img_arr, current_node, line_num, border_top, border_bot):
-    """Gets the neighbouring nodes together with the neighbour cost"""
+    """Gets the neighbouring nodes (of a current node) together with the
+    neighbour cost.
+
+    inputs:
+    img_arr -- The original img array.
+    current_node -- The node which we want to find the best move for.
+    line_num -- The vertical coordinate of the start and end nodes. This is
+                relevant for our version of the algorithm. When the A* agent
+                deviates from the line_num, the cost is higher than when
+                the A* agent moves towards the line_num.
+    border_top -- A line number which cannot be crossed by an agent.
+    border_bot -- A line number which cannot be crossed by an agent.
+
+    outputs:
+    neighbours -- For each possible move, there will be a neighbouring node in
+                  this sequence of neighbours. Here, each element is a tuple
+                  of the form: (cost, new_node)
+    """
     neighbours = []
     possible_moves = np.array([[0, 1], [1, 1], [-1, 1], [-1, 0], [1, 0]])
     for move in possible_moves:
@@ -242,11 +366,10 @@ def get_neighbours(img_arr, current_node, line_num, border_top, border_bot):
         new_node = Node(parent=current_node, position=neighbour_pos)
         if np.array_equal(move, np.array([1, 1])) or np.array_equal(move, np.array([-1, 1])):
             # Neighbour cost is 14 when moving diagonally
-            # But 9 when moving diagonally towards the line_num
+            # But 9 when moving diagonally towards the line_num (experimental)
             if abs(r - line_num) > abs(current_node.position[0] - line_num):
                 neighbours.append((14, new_node))
             else:
-                # Testing this! TODO: EITHER REMOVE THIS OR LET IT STAY IF IT WORKS
                 neighbours.append((9, new_node))
         else:
             # Neighbour cost is 10 when moving up, down or to the right
@@ -330,6 +453,22 @@ def supersample_path(path):
 
 
 def extract_line_images(img_arr, astar_paths, n_cols, filename, visualize):
+    """This function extracts line segments from the image. The segments
+    are based on the A* paths.
+
+    inputs:
+    img_arr -- The numpy array of the test image.
+    astar_paths -- The sequence of A* paths which detected paths between
+                   textual lines.
+    n_cols -- The number of columns the line images should have. This is based
+              on the length of the A* paths inside the sequence astar_paths.
+    filename -- The filename of the original img. Only used for saving figures.
+    visualize -- Whether to save figures.
+
+    outputs:
+    segment_arrs -- A sequence of numpy arrays, where each numpy array
+                    represents a segmented line.
+    """
     segment_arrs = []
     for index, segment_bottom_path in enumerate(astar_paths[1:]):
         segment_top_path = astar_paths[index]
@@ -375,7 +514,7 @@ def segment_characters(line_segments, filename, args):
     for index, seg_arr in enumerate(line_segments):
         seg_arr = np.rot90(seg_arr)
         seg_hist = create_histogram(seg_arr, smooth=31)
-        seg_minima = extract_local_minima(seg_hist, persistence_threshold=args.persistence_threshold)
+        seg_minima = histogram_to_minima(seg_hist, persistence_threshold=args.persistence_threshold)
 
         line_astar_paths = perform_astar_pathfinding(
             seg_arr, seg_minima, 
@@ -411,18 +550,18 @@ def extract_char_images(char_astar_paths, line_segments, filename, args):
     Then, we extract the character segments like we did with the line segments.
     Then we rotate back. Meanwhile, we test if the character has enough ink.
 
-    args:
+    inputs:
     char_astar_paths -- Each line has numerous astar_paths that denote
-        boundaries between character zones
+                        boundaries between character zones
     line_segments -- The line segments with all the characters in it.
-        This is essentially a list of numpy arrays, where the numpy arrays
-        are the segmented line-images.
+                     This is essentially a list of numpy arrays, where the
+                     numpy arrays are the segmented line-images.
     filename -- The filename of the test image we are currently processing.
-    args -- The command line arguments.
+    args     -- The command line arguments (mostly defaults).
 
-    returns:
+    outputs:
     char_segments -- A list of lists where each nested list contains all
-        segmented characters of a line.
+                     segmented characters of a line.
     """
     l_idx = 0
     char_segments = []
@@ -459,7 +598,8 @@ def find_single_multi_char(img_arr, filename, args):
     output_arr = [[] for _ in img_arr]
     for idx, line in enumerate(img_arr):
         for l_idx, char_seg in enumerate(line):
-            arr = np.array(char_seg, dtype=np.uint8) #apply dilation and erosion to improve image
+            # Apply dilation and erosion to improve image
+            arr = np.array(char_seg, dtype=np.uint8)
             kernel = np.ones((3,3),np.uint8)
             dilation = cv.dilate(arr,kernel,iterations = 3)
             erode = cv.erode(dilation,kernel,iterations = 2)
@@ -479,7 +619,8 @@ def find_single_multi_char(img_arr, filename, args):
                 max_x = 0
                 min_y = np.inf
                 max_y = 0
-                for i, pixel in enumerate(cont): #find the length of all the contours in the image
+                # Find the length of all the contours in the image
+                for i, pixel in enumerate(cont): 
                     if pixel[0][0] < min_x:
                       min_x = pixel[0][0]
                     if pixel[0][0] > max_x:
@@ -493,7 +634,7 @@ def find_single_multi_char(img_arr, filename, args):
                 max_y_arr.append(max_y)
                 min_y_arr.append(min_y)
 
-            #first check is the width of all contours in the original segment
+            # First check is the width of all contours in the original segment
             if len(max_x_arr) != 0 and len(min_x_arr) !=0 and max(max_x_arr) - min(min_x_arr) > 110: 
                 if len(contours[0]) != 0:
                     for k, cont in enumerate(contours): #go over the different blobs in the original segment
@@ -504,17 +645,6 @@ def find_single_multi_char(img_arr, filename, args):
                             cv.drawContours(c_UMat, contours, k, (0,0,0), -1)
                             c = cv.UMat.get(c_UMat)
                             c_inv = np.absolute(c/255 -1)
-                            # c = np.asarray(matrix)
-                            # cv.drawContours(c, contours, k, (0,0,0), -1)
-                            #uncomment for comparing the new segment with the complete segment
-                            # cc = Image.fromarray(c)
-                            # fig = plt.figure(figsize=(5,5))
-                            # fig.add_subplot(1,2,1)
-                            # a = Image.fromarray(erode)
-                            # plt.imshow(a)
-                            # fig.add_subplot(1,2,2)
-                            # plt.imshow(cc)
-                            # plt.show()
                             if np.sum(c_inv) > args.n_black_pix_threshold: 
                                 output_arr[idx].append(c)
                                 if args.visualize:
@@ -539,6 +669,21 @@ def find_single_multi_char(img_arr, filename, args):
     return output_arr
 
 def segment_from_args(args, filename):
+    """This is the function that calls all other function in this program.
+    This function is called by main.py. 
+    
+    inputs:
+    args -- The arguments to the program, mostly defaults.
+    filename -- The filename of the image that we want to segment.
+                The file still has to be opened, which is done in this function.
+    
+    outputs:
+    finer_segmented_chars -- A list of lists of numpy arrays.
+                             Each numpy array represents a character.
+                             Each list of numpy arrays represents a line of
+                             characters. Each list of lists of numpy arrays
+                             represents all lines of characters in a document.
+    """
     print(f"Segmenting {filename}")
     if args.visualize:
         fig_dirs = ["Figures/char_segments", "Figures/line_segments",

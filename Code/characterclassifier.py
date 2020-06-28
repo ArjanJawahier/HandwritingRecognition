@@ -8,8 +8,8 @@ import torch.nn as nn
 class CharacterClassifier(nn.Module):
     """A classifier class that consists of ResNet blocks.
     
-    Args:
-        args -- the options object that contains all user-defined option variables
+    inputs:
+    args -- the options object that contains all user-defined option variables
     """
     def __init__(self, args):
         super(CharacterClassifier, self).__init__()

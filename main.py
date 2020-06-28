@@ -30,7 +30,12 @@ import Code.preprocess as preprocess
 
 def parse_args():
     """Parses command line arguments and defines defaults for
-    user-defined variables."""
+    user-defined variables.
+
+    outputs:
+    parser.parse_args() -- The arguments as parsed by the ArgumentParser.
+                           Most of these will be defaults.
+    """
 
     parser = argparse.ArgumentParser(description="Character classifier for the Dead Sea Scrolls")
     # Base options
@@ -215,6 +220,12 @@ def predict(args, network, data, device, labels):
     inputs:
     args -- The arguments given to the program. Most of these will be defaults.
     network -- The network that should predict the labels.
+    data -- The sequence of character images of which we need to predict labels.
+    device -- Either cpu or gpu, based on whether cuda is available.
+    labels -- A dictionary of class labels. These labels are unicode characters.
+
+    outputs:
+    return_array -- The sequence of unicode characters and class labels (ints) 
     """
     returned_characters = []
     returned_labels = []
@@ -234,10 +245,12 @@ def predict(args, network, data, device, labels):
     return return_array
 
 def argument_error(message):
+    """Function that prints an error message and exits the program."""
     print("ERROR: " + message)
     exit(-1)
 
 def most_frequent(List): 
+    """Finds the most frequent element in the input list."""
     counter = 0
     num = List[0] 
       
