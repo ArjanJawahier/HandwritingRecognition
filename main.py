@@ -391,10 +391,6 @@ def main():
 
                         style_img = Image.fromarray(char)
                         style = style_classifier.predict_style(style_img, labelled_character)
-
-                        img = Image.fromarray(char)
-                        img.save("test_characters/image" + str(line_num) + str(char_key) +"_"+ labelled_character + "_"+ style+".jpg", "JPEG")
-
                         style_distances = style_classifier.get_distance(style_img, labelled_character)
                         pred_styles[style] += 1
                         for dist_key, dist in style_distances.items():
