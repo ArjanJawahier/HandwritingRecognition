@@ -17,8 +17,8 @@ class StyleClassifier:
 
     def __init__(self, train_data="../Style_Data/", use_dict="Code/style_data.pkl"):
         
+        self.train_data = train_data
         if len(use_dict) == 0:
-            self.train_data = train_data
             self.average_styles = self.make_average_styles()
 
             dict_file = open("style_data.pkl", "wb")
@@ -29,6 +29,7 @@ class StyleClassifier:
         else:
             dict_file = open(use_dict, "rb")
             self.average_styles = pickle.load(dict_file)
+            self.average_styles_nonchar = self.make_average_styles_nonchar()
             dict_file.close()
 
     def make_average_styles(self):
@@ -52,8 +53,21 @@ class StyleClassifier:
                         average_styles[character][style] = average
         return average_styles
 
-    def predict_style(self, img, character):
-        eh = self.edge_hinge(img)
+    def make_average_styles_nonchar(self):
+        average_styles = {}
+        for style in os.listdir(self.train_data):
+            eh = []
+            for character in os.listdir(self.train_data + style + "/"):
+                for file in os.listdir(self.train_data + style + "/" + character + "/"):
+                    if file.endswith(".jpg"):
+                        img = Image.open(os.path.join(
+                            self.train_data + style + "/" + character + "/", file))
+                        eh.append(self.edge_hinge(img))
+            average_styles[style] = np.mean(eh, axis=0)
+        return average_styles
+
+    def predict_style(self, eh, character):
+        # eh = self.edge_hinge(img)
         min_dist = 99999
         for key, value in self.average_styles[character].items():
             dist = np.linalg.norm(eh - value)
@@ -64,11 +78,30 @@ class StyleClassifier:
         assert closest_style != None
         return closest_style
 
+    def predict_style_nonchar(self, eh):
+        # eh = self.edge_hinge(img)
+        min_dist = 99999
+        for key, value in self.average_styles_nonchar.items():
+            dist = np.linalg.norm(eh - value)
+            if dist < min_dist:
+                closest_style = key
+                min_dist = dist
+        # If None there is no average style for this character
+        assert closest_style != None
+        return closest_style
 
-    def get_distance(self, img, character):
-        eh = self.edge_hinge(img)
+
+    def get_distance(self, eh, character):
+        # eh = self.edge_hinge(img)
         distances = {}
         for key, value in self.average_styles[character].items():
+            distances[key] = np.linalg.norm(eh - value)
+        return distances
+
+    def get_distance_nonchar(self, eh):
+        # eh = self.edge_hinge(img)
+        distances = {}
+        for key, value in self.average_styles_nonchar.items():
             distances[key] = np.linalg.norm(eh - value)
         return distances
 
