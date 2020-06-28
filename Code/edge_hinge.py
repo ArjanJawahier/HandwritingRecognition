@@ -33,6 +33,15 @@ class StyleClassifier:
             dict_file.close()
 
     def make_average_styles(self):
+        """This function is used to create a dict of the edge hinges per 
+        character per style.
+
+        inputs:
+        self -- The StyleClassifier
+
+        outputs:
+        avrage_styles -- A dict of an average style per character per style
+        """
         average_styles = {}
         for style in os.listdir(self.train_data):
             for character in os.listdir(self.train_data + style + "/"):
@@ -54,6 +63,17 @@ class StyleClassifier:
         return average_styles
 
     def predict_style(self, eh, character):
+        """This function uses the distances between the trained style averages,
+        and the edge hinge of the current character, to predict a style. 
+
+        inputs:
+        self -- The StyleClassifier
+        eh -- The edge hinge matrix of the current character
+        character -- The current character
+
+        outputs:
+        closest_style -- The predicted style, with the shortest distance
+        """
         min_dist = np.inf
         for key, value in self.average_styles[character].items():
             dist = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)]) 
@@ -65,6 +85,17 @@ class StyleClassifier:
         return closest_style
 
     def get_distance(self, eh, character):
+        """This function gets the distances between the trained style averages,
+        and the edge hinge of the current character. 
+
+        inputs:
+        self -- The StyleClassifier
+        eh -- The edge hinge matrix of the current character
+        character -- The current character
+
+        outputs:
+        distances -- An array of distances for each style
+        """
         distances = {}
         for key, value in self.average_styles[character].items():
             distances[key] = 0.5 * np.sum([((a - b) ** 2) / (a + b + 1e-6) for (a, b) in zip(eh, value)])
@@ -72,6 +103,17 @@ class StyleClassifier:
         return distances
 
     def edge_hinge(self, img):
+        """This function calculates the edge hinge.
+        It does this by looking at each point in the square surrounding a point
+        in the array, If at one of these points 
+
+        inputs:
+        self -- The StyleClassifier
+        img --The currect character image
+
+        outputs:
+        eh -- a matrix of values representing the edge hinge
+        """
         frag_length = 5
         width, height = img.size
         eh = np.zeros(((frag_length) * 8 + 1, (frag_length) * 8 + 1))
@@ -99,6 +141,10 @@ class StyleClassifier:
         return eh
 
 if __name__ == "__main__":
+    """The main of this file is only present for testing purposes,
+    The below code checks for each first character in each style of the
+    Style Data which style it fits to.
+    """
     classifier = StyleClassifier("../Style_Data/")
     correct = 0
     incorrect = 0
@@ -134,6 +180,5 @@ if __name__ == "__main__":
 
     print(correct)
     print(incorrect)
-
     print(result_dict)
     print(character_dict)
