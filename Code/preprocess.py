@@ -1,6 +1,4 @@
 """preprocess.py
-The code in this file calculates the center of mass of an input image
-and crops the image with the center of mass as the new center of the output image.
 """
 
 from skimage.transform import resize
@@ -14,16 +12,34 @@ import torch
 import Code.util as util
 
 def center_of_mass(image):
-    """Computes center of mass.
-    Scipy's center_of_mass function
-    uses bright pixels to compute the center of mass,
-    so we first invert the image"""
+    """Computes center of mass. Scipy's center_of_mass function uses bright
+    pixels to compute the center of mass, so we first invert the image.
+
+    inputs:
+    image -- The input image (PIL Image instance)
+
+    outputs:
+    cent_mass -- The center of mass of the input image
+    """
     inverted_img = ImageOps.invert(image)
     inverted_arr = np.array(inverted_img)
     cent_mass = ndimage.measurements.center_of_mass(inverted_arr)
     return cent_mass
 
 def crop_image(arr, cent_of_mass, crop_dims, args):
+    """This function crops an image according to the center of mass and the
+    crop dimensions. The center of mass will be the center of the image after
+    cropping. The width and height will both be equal to crop_dims[0]*2 + 1.
+
+    inputs:
+    arr          -- The image to be cropped (numpy array)
+    cent_of_mass -- The center of mass, will be the new image's center.
+    crop_dims    -- The number of pixels on each side of the center pixel.
+    args         -- The arguments to the program. Most of these are defaults.
+
+    outputs:
+    cropped      -- A cropped version of the input arr
+    """
     cent_r, cent_c = cent_of_mass
     cent_r, cent_c = int(cent_r), int(cent_c)
     
@@ -48,6 +64,20 @@ def crop_image(arr, cent_of_mass, crop_dims, args):
     return cropped
 
 def zoom_image(arr, cent_of_mass, crop_dims, args):
+    """This function will zoom in on a character in an image.
+    Essentially, this function calls crop_image again, with different 
+    parameters, based on where the black pixels in the image are.
+    All rows and columns outside the character are cropped away. Then, the
+    character image is scaled so that the dimensions are the same.
+
+    inputs:
+    arr          -- The image numpy array
+    cent_of_mass -- The center of mass. Should be equal to the center pixel
+    crop_dims    -- The old number of pixels on each side of the center pixel.
+                    The image after cropping will be scaled to have this number
+                    of pixels on each side of the center pixel once more.
+    args         -- The arguments to the program, mostly defaults.
+    """
     # The width and height should be equal at this point
     assert(arr.shape[0] == arr.shape[1])
     # invert and normalize
@@ -71,6 +101,32 @@ def zoom_image(arr, cent_of_mass, crop_dims, args):
 
 
 def preprocess_arrays(arrs, args, src_filename=None, crop_dimensions=(63, 63)):
+    """This function is called once when predicting sequences of character 
+    labels in main.py. This is only used for predicting, because arrs_to_tensor
+    is used when training.
+
+    inputs:
+    arrs         -- The sequence of character images, this sequence is a list
+                    of lists of numpy arrays. Each of these numpy arrays
+                    represents a character image. Each list of numpy arrays
+                    represents a line of characters. Each list of lists
+                    represents a whole document (multiple lines).
+    args         -- The arguments to the program, mostly defaults.
+    src_filename -- The filename of the image the characters come from.
+                    This is only used for saving the visualized figures under
+                    a comprehensive directory name.
+    crop_dimensions -- An argument for the crop_image and zoom_image functions:
+                       The numbers represent the number of pixels on each side
+                       of the center pixel. If crop_dimensions == (1, 2), there
+                       would be 1 pixel on the left and right of the center 
+                       pixel, and 2 pixels on top and on bottom of the center
+                       pixel.
+
+    outputs:
+    return_arrs  -- The sequence of character images, cropped according to
+                    the center of mass, and zoomed. The sequence should have
+                    the same structure as the input arrs.
+    """
     if args.visualize:
         util.makedirs("Figures/cropped_chars")    
 
@@ -96,7 +152,26 @@ def preprocess_arrays(arrs, args, src_filename=None, crop_dimensions=(63, 63)):
     return return_arrs
 
 def arrs_to_tensor(arrs, args, crop_dimensions=(63, 63)):
-    # This expects numpy arrays
+    """This function preprocesses a numpy array of character images. This 
+    function is only called in the train and test steps of main.py. For 
+    predicting, we use preprocess_arrays. Essentially, the input images
+    are cropped and zoomed, just like in preprocess_arrays, but then the
+    sequence is converted to a Tensor object.
+
+    inputs:
+    arrs            -- The sequence of character images (numpy array)
+    args            -- The arguments to the program, mostly defaults.
+    crop_dimensions -- An argument for the crop_image and zoom_image functions:
+                       The numbers represent the number of pixels on each side
+                       of the center pixel. If crop_dimensions == (1, 2), there
+                       would be 1 pixel on the left and right of the center 
+                       pixel, and 2 pixels on top and on bottom of the center
+                       pixel.
+
+    outputs:
+    torch.Tensor(return_arr) -- A PyTorch Tensor object of the preprocessed
+                                character images.
+    """
     return_arr = []
     for img in arrs:
         img = img.reshape(img.shape[-2], img.shape[-1]) * 255
