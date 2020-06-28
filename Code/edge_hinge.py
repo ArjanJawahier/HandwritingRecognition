@@ -81,15 +81,15 @@ class StyleClassifier:
                 count = 1
                 found = False
                 init = 1
-                for z_1 in range(-frag_length, frag_length):
-                    for z_2 in range(-frag_length, frag_length):
+                for z_1 in range(-frag_length, frag_length+1):
+                    for z_2 in range(-frag_length, frag_length+1):
                         if (z_1 == -frag_length or z_1 == frag_length or z_2 == -frag_length or z_2 == frag_length):
                             if not found:
-                                if pic[y + z_2, x + z_1] == 1:
+                                if pic[y + z_2, x + z_1] == 0:
                                     found = True
                                     init = count
                             else:
-                                if pic[y + z_2, x + z_1] == 1:
+                                if pic[y + z_2, x + z_1] == 0:
                                     found = True
                                     eh[init, count] += 1
                             count += 1
