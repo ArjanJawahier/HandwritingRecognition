@@ -359,34 +359,49 @@ def main():
                 print(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
                 continue
 
-            char_segments = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
+            char_segments_unprocessed = segmentation.segment_from_args(args, filename)
+            char_segments = preprocess.preprocess_arrays(char_segments_unprocessed, args, filename)
             pred_lines = []
-            pred_styles = []
-            for line in char_segments:
+            pred_styles = {"Hasmonean":0, "Archaic":0, "Herodian":0}
+            style_distances_count = {"Hasmonean":(0,0), "Archaic":(0,0), "Herodian":(0,0)}
+            for line_num, line in enumerate(char_segments):
                 pred = predict(args, clf, line, device, unicode_labels)
                 pred_uni, pred_lab = pred
                 if len(pred_uni) > 0:
                     pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
                     pred_lines.append(pred_uni)
-                    for key, char in enumerate(line):
+                    for char_key, char in enumerate(line):
                         labelled_character = "none"
                         for key2, value in class_labels.items():
-                            if int(value) == int(pred_lab[key]):
+                            if int(value) == int(pred_lab[char_key]):
                                 labelled_character = key2
-                        style = style_classifier.predict_style(Image.fromarray(char//255), labelled_character)
-                        pred_styles.append(style)
+                        style_img = Image.fromarray(char//255)
+                        style = style_classifier.predict_style(style_img, labelled_character)
+                        style_distances = style_classifier.get_distance(style_img, labelled_character)
+                        pred_styles[style] += 1
+                        for dist_key, dist in style_distances.items():
+                            current_count, current_dist = style_distances_count[dist_key]
+                            style_distances_count[dist_key] = (current_count+1, current_dist+dist)
+
 
             with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
                 outfile.writelines(pred_lines)
                 print(f"Written output to results/{name}_characters.txt")
 
+            pred_style_distances =  {"Hasmonean":0, "Archaic":0, "Herodian":0}
+            for key, value in style_distances_count.items():
+                count, dist = value
+                pred_style_distances[key] = dist/count
+
             print("=========")
             print(pred_styles)
             print("=========")
+            print(pred_style_distances)
+            print("=========")
             with open(f"results/{name}_style.txt", "w", encoding="utf-8") as outfile:
-                outfile.writelines(most_frequent(pred_styles))
-                print(f"classified style: ", most_frequent(pred_styles), "\n")
+                outfile.writelines(max(pred_styles, key=pred_styles.get))
+                print(f"classified style: ", max(pred_styles, key=pred_styles.get), "\n")
+                print(f"classified style: ", min(pred_style_distances, key=pred_style_distances.get), "\n")
 
 if __name__ == "__main__":
     main()
