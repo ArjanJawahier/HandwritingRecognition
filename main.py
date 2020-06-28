@@ -111,14 +111,20 @@ def create_dataloaders(args):
     return train_loader, valid_loader, test_loader
 
 def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
-    """Performs the training loop.
+    """Performs the training loop. We also calculate train and validation loss.
     Args:
-        args         -- user-defined options
-        train_data   -- DataLoader object that yields data in batches, used for training
-        nll_loss     -- PyTorch NLLLoss object, computes losses
-        optimizer    -- Optimizer used during training
-        device       -- Either cpu or cuda, cuda provides faster training
-        valid_data   -- DataLoader object that yields data in batches, used for validation
+    args         -- user-defined options
+    train_data   -- DataLoader object that yields data in batches, used for training
+    nll_loss     -- PyTorch NLLLoss object, computes losses
+    optimizer    -- Optimizer used during training
+    device       -- Either cpu or cuda, cuda provides faster training
+    valid_data   -- DataLoader object that yields data in batches, used for validation
+
+    Returns:
+    train_accs   -- The list of train accuracies for each epoch
+    train_losses -- The list of train losses for each epoch
+    val_accs     -- The list of validation accuracies for each epoch
+    val_losses   -- The list of validation losses for each epoch
     """
     train_accs, train_losses, val_accs, val_losses = [], [], [], []
 
@@ -163,6 +169,23 @@ def train(args, network, train_data, nll_loss, optimizer, device, valid_data):
 
 
 def test(args, network, test_data, nll_loss, device):
+    """Tests the classifier on some test_data. This test_data can be either
+    validation data or the real test set.
+
+    inputs:
+    args -- The arguments given to the program. Most of these will be defaults.
+    network -- the network we are testing. Should be a character classifier.
+    test_data -- The dataloader which holds the dataset on which we perform 
+                 testing.
+    nll_loss -- A PyTorch negative log-likelihood loss function.
+    device -- We can test on either cpu or gpu, depending on whether cuda 
+              is available.
+
+    outputs:
+    accuracy -- The number of correct predictions divided by the total
+                number of predictions.
+    avg_loss -- The average loss over all predictions.
+    """
     losses = []
     n_correct = 0
     n_preds = 0
@@ -186,6 +209,13 @@ def test(args, network, test_data, nll_loss, device):
     return accuracy, avg_loss
 
 def predict(args, network, data, device, labels):
+    """This function predicts the labels of a sequence of character images.
+    It does this with the use of a given network, trained to do this task.
+
+    inputs:
+    args -- The arguments given to the program. Most of these will be defaults.
+    network -- The network that should predict the labels.
+    """
     returned_characters = []
     returned_labels = []
     for char_img in data:
@@ -335,8 +365,7 @@ def main():
             pred_styles = []
             for line in char_segments:
                 pred = predict(args, clf, line, device, unicode_labels)
-                pred_uni = pred[0]
-                pred_lab = pred[1]
+                pred_uni, pred_lab = pred
                 if len(pred_uni) > 0:
                     pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
                     pred_lines.append(pred_uni)
@@ -345,7 +374,7 @@ def main():
                         for key2, value in class_labels.items():
                             if int(value) == int(pred_lab[key]):
                                 labelled_character = key2
-                        style = style_classifier.predict_style(Image.fromarray(char*255), labelled_character)
+                        style = style_classifier.predict_style(Image.fromarray(char//255), labelled_character)
                         pred_styles.append(style)
 
             with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
