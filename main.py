@@ -69,11 +69,12 @@ def parse_args():
     # Test/segmentation options
     parser.add_argument("--network_path", type=str, default="Networks/final_network_05_epochs_1000_6_blocks.pt", help="The filepath of the network you want to test.")
     parser.add_argument("-v", "--visualize", action="store_true", help="Tell the program whether to visualize intermediate results. See visualizer.py")
-    parser.add_argument("--CONST_C", type=int, default=-80, help="The constant C in the formula for D(n). See A* paper.")
+    parser.add_argument("-va", "--visualize_astar", action="store_true", help="Tell the program whether to visualize intermediate astar paths. See visualizer.py.")
+    parser.add_argument("--CONST_C", type=int, default=16, help="The constant C in the formula for D(n). See A* paper.")
     parser.add_argument("-s", "--subsampling", type=int, default=4, help="The subsampling factor of the test image prior to performing the A* algorithm.")
-    parser.add_argument("--CONST_C_CHAR", type=int, default=-366, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
+    parser.add_argument("--CONST_C_CHAR", type=int, default=50, help="The constant C in the formula for D(n), used for segmenting characters. See A* paper.")
     parser.add_argument("-sc", "--subsampling_char", type=int, default=1, help="The subsampling factor of the segmented image prior to performing the A* algorithm (for characters).")
-    parser.add_argument("-p", "--persistence_threshold", type=int, default=1, help="The persistence threshold for finding local extrema.")
+    parser.add_argument("-p", "--persistence_threshold", type=int, default=40, help="The persistence threshold for finding local extrema.")
     parser.add_argument("--n_black_pix_threshold", type=int, default=200, help="The minimum number of black pixels per character image.")
     return parser.parse_args()
 

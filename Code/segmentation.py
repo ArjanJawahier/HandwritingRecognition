@@ -317,6 +317,7 @@ def astar(img_arr, line_num, border_top, border_bot, return_dict, const_c, subsa
 
         for neighbour_cost, neighbour in neighbours:
             inserted = False
+
             if neighbour not in expanded_nodes:
                 # Calculate g, h and f values
                 d_cost = const_c / (1 + min_dist_cost(img_arr, neighbour))
@@ -386,7 +387,7 @@ def min_dist_cost(img_arr, node):
     dist_up = 0
     current_r, current_c = node.position
     for r in range(current_r, -1, -1):
-        if img_arr[r, current_c] > 0:
+        if img_arr[r, current_c] < 1:
             breaked_up = True
             break
         else:
@@ -394,7 +395,7 @@ def min_dist_cost(img_arr, node):
 
     dist_down = 0
     for r in range(current_r, img_arr.shape[0]):
-        if img_arr[r, current_c] > 0:
+        if img_arr[r, current_c] < 1:
             breaked_down = True
             break
         else:
@@ -531,12 +532,16 @@ def segment_characters(line_segments, filename, args):
         if args.visualize:
             util.makedirs([
                 f"Figures/char_histograms/{filename}",
-                f"Figures/astar_paths/{filename}"
             ])
             vis.plot_histogram(
                 seg_hist,
                 f"Figures/char_histograms/{filename}/character_histogram_{index}.png"
             )
+
+        if args.visualize_astar:
+            util.makedirs([
+                f"Figures/astar_paths/{filename}"
+            ])
             image = Image.fromarray(seg_arr).convert("L")
             vis.draw_astar_lines(
                 image, line_astar_paths, width=3,
@@ -704,7 +709,7 @@ def segment_from_args(args, filename):
     astar_paths = supersample_paths(astar_paths)
 
     # We now have the A* paths in the horizontal direction
-    if args.visualize:
+    if args.visualize_astar:
         image = ImageOps.invert(binarized_image)
         image = image.rotate(best_rot)
         image = ImageOps.invert(image)
