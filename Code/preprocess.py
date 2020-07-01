@@ -133,21 +133,25 @@ def preprocess_arrays(arrs, args, src_filename=None, crop_dimensions=(63, 63)):
     return_arrs = [[] for _ in arrs]
     for l_idx, line in enumerate(arrs):
         for c_idx, char in enumerate(line):
-            image = Image.fromarray(char).convert("L")
-            cent_mass = center_of_mass(image)
 
-            image_arr = np.array(image)
-            image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
-            image_arr = zoom_image(image_arr, cent_mass, crop_dimensions, args)
+            try:
+                image = Image.fromarray(char).convert("L")
+                cent_mass = center_of_mass(image)
 
-            if np.sum(np.absolute(image_arr/255 - 1)) > args.n_black_pix_threshold:
-                return_arrs[l_idx].append(image_arr)
+                image_arr = np.array(image)
+                image_arr = crop_image(image_arr, cent_mass, crop_dimensions, args)
+                image_arr = zoom_image(image_arr, cent_mass, crop_dimensions, args)
 
-            if args.visualize:
-                image = Image.fromarray(image_arr).convert("L")
-                util.makedirs(f"Figures/cropped_chars/{src_filename}")
-                image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
+                if np.sum(np.absolute(image_arr/255 - 1)) > args.n_black_pix_threshold:
+                    return_arrs[l_idx].append(image_arr)
 
+                if args.visualize:
+                    image = Image.fromarray(image_arr).convert("L")
+                    util.makedirs(f"Figures/cropped_chars/{src_filename}")
+                    image.save(f"Figures/cropped_chars/{src_filename}/char_{l_idx}_{c_idx}.png")
+            except Exception:
+                print(f"An expection has occurred while segmenting {src_filename}. Skipping the problematic character!")
+                continue
 
     return return_arrs
 

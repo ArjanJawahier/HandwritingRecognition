@@ -139,6 +139,7 @@ Networks/network*
 results/*
 Train_Data/*
 Test_Data/*
+OLD_TEST/*
 Figures/*
 Style_Data/*
 *imagemorph

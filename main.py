@@ -371,44 +371,49 @@ def main():
 
         test_filenames = os.listdir(args.test_dataroot)
         for f_idx, filename in enumerate(test_filenames):
-            name, ext = os.path.splitext(filename)
-            if ext != ".jpg" and ext != ".jpeg":
-                print(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+            try:
+                name, ext = os.path.splitext(filename)
+                if ext != ".jpg" and ext != ".jpeg":
+                    print(f"The file {args.test_dataroot}/{filename} is not a JPEG file.")
+                    continue
+
+                char_segments = segmentation.segment_from_args(args, filename)
+                char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
+                pred_lines = []
+                pred_styles = {"Hasmonean":0, "Archaic":0, "Herodian":0}
+                for line_num, line in enumerate(char_segments):
+                    pred = predict(args, clf, line, device, unicode_labels)
+                    pred_uni, pred_lab = pred
+                    if len(pred_uni) > 0:
+                        pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
+                        pred_lines.append(pred_uni)
+                        for char_key, char in enumerate(line):
+                            labeled_char = "none"
+                            for key2, value in class_labels.items():
+                                if int(value) == int(pred_lab[char_key]):
+                                    labeled_char = key2
+
+                            style_img = Image.fromarray(char//255)
+                            hinge = style_classifier.edge_hinge(style_img)
+                            style = style_classifier.predict_style(hinge, labeled_char)
+                            pred_styles[style] += 1
+
+
+                with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
+                    outfile.writelines(pred_lines)
+                    print(f"Written output to results/{name}_characters.txt")
+
+                print("=========")
+                print(pred_styles)
+                print("=========")
+
+                with open(f"results/{name}_style.txt", "w", encoding="utf-8") as outfile:
+                    outfile.writelines(max(pred_styles, key=pred_styles.get))
+                    print(f"classified style: ", max(pred_styles, key=pred_styles.get), "\n")
+            except Exception:
+                print(f"Exception in main.py, skipping {filename}!")
                 continue
-
-            char_segments = segmentation.segment_from_args(args, filename)
-            char_segments = preprocess.preprocess_arrays(char_segments, args, filename)
-            pred_lines = []
-            pred_styles = {"Hasmonean":0, "Archaic":0, "Herodian":0}
-            for line_num, line in enumerate(char_segments):
-                pred = predict(args, clf, line, device, unicode_labels)
-                pred_uni, pred_lab = pred
-                if len(pred_uni) > 0:
-                    pred_uni = " ".join(list(reversed(pred_uni))) + "\n"
-                    pred_lines.append(pred_uni)
-                    for char_key, char in enumerate(line):
-                        labeled_char = "none"
-                        for key2, value in class_labels.items():
-                            if int(value) == int(pred_lab[char_key]):
-                                labeled_char = key2
-
-                        style_img = Image.fromarray(char//255)
-                        hinge = style_classifier.edge_hinge(style_img)
-                        style = style_classifier.predict_style(hinge, labeled_char)
-                        pred_styles[style] += 1
-
-
-            with open(f"results/{name}_characters.txt", "w", encoding="utf-8") as outfile:
-                outfile.writelines(pred_lines)
-                print(f"Written output to results/{name}_characters.txt")
-
-            print("=========")
-            print(pred_styles)
-            print("=========")
-
-            with open(f"results/{name}_style.txt", "w", encoding="utf-8") as outfile:
-                outfile.writelines(max(pred_styles, key=pred_styles.get))
-                print(f"classified style: ", max(pred_styles, key=pred_styles.get), "\n")
 
 if __name__ == "__main__":
     main()
+
